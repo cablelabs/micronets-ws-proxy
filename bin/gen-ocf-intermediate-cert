@@ -1,0 +1,184 @@
+function bailout()
+{
+    local shortname="${0##*/}"
+    local message="$1"
+    echo "$shortname: error: ${message}"
+    exit 1;
+}
+
+function bailout_with_usage()
+{
+    local shortname="${0##*/}"
+    local message="$1"
+    echo "$shortname: error: ${message}"
+    print_usage
+    exit 1;
+}
+
+function print_usage()
+{
+    local shortname="${0##*/}"
+    echo " "
+    echo "Usage: ${shortname} --ca-keyfile <ca-key-file> "
+    echo "          [--ca-certfile <ca-certificate-file>]"
+    echo "          [--cert-basename <intermediate-cert-base-name>]"
+    echo "          [--subject-org-name <subject-organization-name>]"
+    echo "          [--expiration-in-days <expiration-in-days>]"
+    echo "          [--force-overwrite]"
+    echo ""
+    echo "       ${shortname} generates an OCF-compliant certificate used to sign"
+    echo "       either intermediate signing certificates or OCF leaf certificates."
+    echo "       The default base filename for the intermediate certificate and key file"
+    echo "       will be ${cert_basename}."
+}
+
+function process_arguments()
+{
+    shopt -s nullglob
+
+    ca_cert_file=""
+    ca_key_file=""
+    cert_basename="ocf_intermediate_ca"
+    subject_org_name="${cert_basename}-IntermediateCA"
+    expiration_in_days=500
+    let force_overwrite=0
+
+    while [[ $1 == --* ]]; do
+        if [ "$1" == "--ca-keyfile" ]; then
+            shift
+            ca_key_file="$1"
+            shift
+        elif [ "$1" == "--ca-certfile" ]; then
+            shift
+            ca_cert_file="$1"
+            shift
+        elif [ "$1" == "--cert-basename" ]; then
+            shift
+            cert_basename="$1"
+            shift
+        elif [ "$1" == "--subject-org-name" ]; then
+            shift
+            subject_org_name="$1"
+            shift
+        elif [ "$1" == "--expiration-in-days" ]; then
+            shift
+            expiration_in_days="$1"
+            shift
+        elif [ "$1" == "--force-overwrite" ]; then
+            force_overwrite=1
+            shift
+        elif [ "$1" == "--help" ]; then
+            print_usage
+            exit -1
+        else 
+            bailout_with_usage "Unrecognized option: $1"
+        fi
+    done
+    
+    if [ $# -gt 0 ]; then
+    bailout_with_usage "Unrecognized additional arguments: $*"
+    fi
+
+    if [ -z "${ca_key_file}" ]; then
+        bailout "CA key file not specified - use --ca-keyfile to set"
+    fi
+    
+    if [ ! -f "${ca_key_file}" ]; then
+        bailout "CA key file ${ca_key_file} is not a normal file or doesn't exist"
+    fi
+    
+    if [ -z "${ca_cert_file}" ]; then
+        bailout "CA certificate file not specified - use --ca-certfile to set"
+    fi
+    
+    if [ ! -f "${ca_cert_file}" ]; then
+        bailout "CA certificate file ${ca_cert_file} is not a normal file or doesn't exist"
+    fi
+
+    # echo "Cert Basename: ${cert_basename}"
+    # echo "CA key file: ${ca_key_file}"
+    # echo "CA cert file: ${ca_cert_file}"
+}
+
+#
+# main logic
+#
+
+process_arguments "$@"
+
+ec_param_file="${cert_basename}.ecparams.pem"
+cert_ext_file="${cert_basename}.cert_ext.txt"
+cert_key_file="${cert_basename}.key.pem"
+cert_csr_file="${cert_basename}.csr.pem"
+cert_file="${cert_basename}.cert.pem"
+cert_der_file="${cert_basename}.cert.der"
+
+if [[ -e "${cert_key_file}" && ( ${force_overwrite} != 1 ) ]]; then
+    bailout "${cert_key_file} already exists and --force-overwrite not specified"
+fi
+
+if [[ -e "${cert_file}" && ( ${force_overwrite} != 1 ) ]]; then
+    bailout "${cert_file} already exists and --force-overwrite not specified"
+fi
+
+#
+# Create parameters with ecparam:
+#
+echo "Creating EC parameter file ${ec_param_file} for EC prime256v1"
+rm -f "${ec_param_file}"
+openssl ecparam -outform PEM -name prime256v1 -out "${ec_param_file}" \
+    || bailout "Error creating EC param file"
+
+#
+#  Create the private key for the root CA
+#
+echo "Creating private key file (${cert_key_file}) from ${ec_param_file}"
+rm -f "${cert_key_file}"
+openssl ecparam -genkey -outform PEM -in "${ec_param_file}" -out "${cert_key_file}"  \
+    || bailout "Error creating private key file"
+
+#
+#  Create a certificate signing request (CSR) for the CA incorporating the private key
+#
+echo "Creating certificate signing request file ("${cert_csr_file}") using key file ${ca_key_file}"
+rm -f "${ec_param_file}" "${cert_csr_file}"
+openssl req -new -key "${cert_key_file}" -out "${cert_csr_file}" \
+    -sha256 -batch -subj "/O=${subject_org_name}" \
+    || bailout "Error creating certificate signing request"
+
+#
+# Create the extension option file
+#
+echo "Creating extension option file (${cert_ext_file})"
+
+(
+ cat <<'EOF'
+[ intermediate_ca ]
+basicConstraints=critical,CA:true
+authorityKeyIdentifier=keyid
+subjectKeyIdentifier=hash
+keyUsage=critical,digitalSignature,keyCertSign,cRLSign
+EOF
+) > "${cert_ext_file}"
+
+#
+# Sign the certificate using the supplied keyfile and add the subject and identiy EKUs
+#
+echo "Signing CA certificate (${cert_file}) with ${ca_key_file}"
+rm -f "${cert_file}" 
+openssl x509 -req -in "${cert_csr_file}" -out "${cert_file}" \
+    -CA "${ca_cert_file}" -CAkey "${ca_key_file}" \
+    -days ${expiration_in_days} -extfile "${cert_ext_file}" -extensions intermediate_ca \
+    -CAcreateserial \
+    || bailout "Error creating root CA certificate"
+rm -f "${cert_ext_file}" "${cert_csr_file}"
+
+# Create the DER certificate encoding
+openssl x509 -in "${cert_file}" -out "${cert_der_file}" -outform der \
+    || bailout "Error creating intermediate certificate DER file \"${cert_der_file}\""
+
+echo "Successfully generated OCF intermediate certificate \"${cert_file}\"/\"${cert_der_file}\""
+echo ""
+
+openssl x509 -in "${cert_file}" -noout -text 
+

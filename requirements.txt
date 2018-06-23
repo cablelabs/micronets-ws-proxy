@@ -1,0 +1,30 @@
+#
+# Output generated via "pip freeze > requirements.txt"
+#
+# Example setup using mkvirtualenv (part of py-virtualenvwrapper):
+#
+# mkvirtualenv -r <micronets-dhcp-project-dir>/requirements.txt -a <micronets-dhcp-project-dir> -p python3 micronets-dhcp
+# workon -c micronets-dhcp
+#
+# Or installing using pip (e.g. into an existing env)
+#
+#  pip install -r requirements.txt 
+# 
+
+aiofiles==0.3.2
+blinker==1.4
+click==6.7
+h11==0.7.0
+h2==3.0.1
+hpack==3.0.0
+Hypercorn==0.1.0
+hyperframe==5.1.0
+itsdangerous==0.24
+Jinja2==2.10
+MarkupSafe==1.0
+multidict==4.3.1
+Quart==0.6.1
+sortedcontainers==2.0.4
+typing-extensions==3.6.5
+websockets==5.0.1
+wsproto==0.11.0
