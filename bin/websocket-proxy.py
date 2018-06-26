@@ -16,6 +16,7 @@ from quart import json
 # Change these if/when necessary
 
 logfile_path = pathlib.Path (__file__).parent.parent.joinpath ('ws-proxy.log')
+logfile_mode = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
 proxy_bind_address = "localhost"
 proxy_port = 5050
 proxy_service_prefix = "/micronets/v1/ws-proxy/"
@@ -141,7 +142,7 @@ def check_json_field (json_obj, field, field_type, required):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
 
-logging.basicConfig (level=logging.DEBUG, filename=logfile_path, 
+logging.basicConfig (level=logging.DEBUG, filename=logfile_path, filemode=logfile_mode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 
 logger = logging.getLogger ('micronets-ws-proxy')
