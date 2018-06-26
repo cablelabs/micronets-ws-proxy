@@ -13,8 +13,14 @@ import ssl
 import configparser
 from quart import json
 
-config_file = pathlib.Path (__file__).parent.joinpath ('ws-proxy.ini')
-config_section = "micronets websocket proxy"
+# Change these if/when necessary
+
+logfile_path = pathlib.Path (__file__).parent.parent.joinpath ('ws-proxy.log')
+proxy_bind_address = "localhost"
+proxy_port = 5050
+proxy_service_prefix = "/micronets/v1/ws-proxy/"
+proxy_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
+root_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem')
 
 meetup_table = {}
 
@@ -135,39 +141,18 @@ def check_json_field (json_obj, field, field_type, required):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
 
-config_parser = configparser.ConfigParser ()
-config_parser.read (config_file)
-
-if (not config_section in config_parser):
-    # Initialize a config file
-    config_parser [config_section] = {"BindAddress": "localhost",
-                                      "BindPort": "5050",
-                                      "LogFile": pathlib.Path (__file__).parent.parent.joinpath ('ws-proxy.log').resolve (),
-                                      "LogLevel": "DEBUG",
-                                      "ProxyCert": pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem').resolve (),
-                                      "CACert": pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem').resolve ()}
-    with open(config_file, 'w') as config_file:
-        config_parser.write (config_file)
-
-config = config_parser [config_section]
-logging.basicConfig (level=logging.DEBUG, filename=config ['LogFile'], 
+logging.basicConfig (level=logging.DEBUG, filename=logfile_path, 
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 
 logger = logging.getLogger ('micronets-ws-proxy')
 
-proxy_service_prefix = "/micronets/v1/ws-proxy/"
-proxy_bind_address = config ['BindAddress']
-proxy_port = config ['BindPort']
-
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
 # Setup the proxy's cert
-proxy_cert_path = config ['ProxyCert']
 logger.info ("Loading proxy certificate from %s", proxy_cert_path)
 ssl_context.load_cert_chain (proxy_cert_path)
 
 # Enable client cert verification
-root_cert_path = config ['CACert']
 logger.info ("Loading CA certificate from %s", root_cert_path)
 ssl_context.load_verify_locations (cafile = root_cert_path)
 ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
