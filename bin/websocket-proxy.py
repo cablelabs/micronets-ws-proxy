@@ -10,13 +10,11 @@ import traceback
 import sys
 import pathlib
 import ssl
+import configparser
 from quart import json
 
-logging.basicConfig (level=logging.DEBUG, filename="ws-proxy.log", 
-                     format='%(asctime)s %(name)s: %(levelname)s %(message)s')
-logger = logging.getLogger ('micronets-ws-proxy')
-
-proxy_service_prefix = "/micronets/v1/ws-proxy/"
+config_file = pathlib.Path (__file__).parent.joinpath ('ws-proxy.ini')
+config_section = "micronets websocket proxy"
 
 meetup_table = {}
 
@@ -137,25 +135,46 @@ def check_json_field (json_obj, field, field_type, required):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
 
-pending_requests = {}
+config_parser = configparser.ConfigParser ()
+config_parser.read (config_file)
 
-proxy_port = 8765
+if (not config_section in config_parser):
+    # Initialize a config file
+    config_parser [config_section] = {"BindAddress": "localhost",
+                                      "BindPort": "5050",
+                                      "LogFile": pathlib.Path (__file__).parent.parent.joinpath ('ws-proxy.log').resolve (),
+                                      "LogLevel": "DEBUG",
+                                      "ProxyCert": pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem').resolve (),
+                                      "CACert": pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem').resolve ()}
+    with open(config_file, 'w') as config_file:
+        config_parser.write (config_file)
+
+config = config_parser [config_section]
+logging.basicConfig (level=logging.DEBUG, filename=config ['LogFile'], 
+                     format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+
+logger = logging.getLogger ('micronets-ws-proxy')
+
+proxy_service_prefix = "/micronets/v1/ws-proxy/"
+proxy_bind_address = config ['BindAddress']
+proxy_port = config ['BindPort']
+
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
 # Setup the proxy's cert
-proxy_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
+proxy_cert_path = config ['ProxyCert']
 logger.info ("Loading proxy certificate from %s", proxy_cert_path)
 ssl_context.load_cert_chain (proxy_cert_path)
 
 # Enable client cert verification
-root_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem')
+root_cert_path = config ['CACert']
 logger.info ("Loading CA certificate from %s", root_cert_path)
 ssl_context.load_verify_locations (cafile = root_cert_path)
 ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
-websocket = websockets.serve (ws_connected, 'localhost', proxy_port, ssl=ssl_context)
+websocket = websockets.serve (ws_connected, proxy_bind_address, proxy_port, ssl=ssl_context)
 
-logger.info (f"Starting micronets websocket proxy on port {proxy_port}...")
+logger.info (f"Starting micronets websocket proxy on {proxy_bind_address} port {proxy_port}...")
 asyncio.get_event_loop ().run_until_complete (websocket)
 asyncio.get_event_loop ().run_forever ()
