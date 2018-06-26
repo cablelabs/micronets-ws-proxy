@@ -2,6 +2,7 @@
 
 # WS proxy server
 
+import logging
 import asyncio
 import websockets
 import time
@@ -10,6 +11,10 @@ import sys
 import pathlib
 import ssl
 from quart import json
+
+logging.basicConfig (level=logging.DEBUG, filename="ws-proxy.log", 
+                     format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+logger = logging.getLogger ('micronets-ws-proxy')
 
 proxy_service_prefix = "/micronets/v1/ws-proxy/"
 
@@ -26,22 +31,22 @@ class WSClient:
 async def ws_connected (websocket, path):
     try:
         remote_address = websocket.remote_address
-        print (f"ws_connected: from {websocket.remote_address}, {path}")
+        logger.info (f"ws_connected: from {websocket.remote_address}, {path}")
         if (not path.startswith (proxy_service_prefix)):
-            print (f"ws_connected: Unsupported path: {proxy_service_prefix} - CLOSING!")
+            logger.warn (f"ws_connected: Unsupported path: {proxy_service_prefix} - CLOSING!")
             return
         meetup_id = path [len (proxy_service_prefix):]
         new_client = WSClient (meetup_id, websocket)
-        print (f"ws_connected: client {id (new_client)}: (meetup_id: {meetup_id})")
-        print (f"ws_connected: client {id (new_client)}: Waiting for HELLO message...")
+        logger.debug (f"ws_connected: client {id (new_client)}: (meetup_id: {meetup_id})")
+        logger.debug (f"ws_connected: client {id (new_client)}: Waiting for HELLO message...")
         hello_message = await get_hello_message (websocket)
-        print (f"ws_connected: client {id (new_client)}: Received HELLO message:")
-        print (json.dumps (hello_message, indent=2))
+        logger.info (f"ws_connected: client {id (new_client)}: Received HELLO message:")
+        logger.info (json.dumps (hello_message, indent=2))
         new_client.hello_message = hello_message
     except ConnectionClosed as cce:
-        print (f"ws_connected: client {id (new_client)} disconnected")
+        logger.info (f"ws_connected: client {id (new_client)} disconnected")
     except Exception as ex:
-        print (f"ws_connected: client {id (new_client)}: Caught an exception processing hello message: {ex}")
+        logger.warn (f"ws_connected: client {id (new_client)}: Caught an exception processing hello message: {ex}")
 
     if (not meetup_id in meetup_table):
         client_list = []
@@ -51,42 +56,42 @@ async def ws_connected (websocket, path):
 
     initial_message = None
     if (len (client_list) == 0):
-        print (f"ws_connected: client {id (new_client)} is the first connected to {path}")
+        logger.debug (f"ws_connected: client {id (new_client)} is the first connected to {path}")
         client_list.append (new_client)
-        print (f"ws_connected: client {id (new_client)} - waiting for peer...")
+        logger.info (f"ws_connected: client {id (new_client)} - waiting for peer on {path}...")
         recv_task = asyncio.get_event_loop ().create_task (websocket.recv ())
         # We need to have a call to recv() in order to know if the socket closes while we're waiting
         done, pending = await asyncio.wait( [new_client.peer_arrival_future, recv_task],
                                             return_when=asyncio.FIRST_COMPLETED)
         if (not new_client.peer_arrival_future in done):
-            raise Exception (f"Client {id (new_client)} failed/recved data before peer could attach")
+            raise Exception (f"Client {id (new_client)} failed/recved data before peer could attach to {path}")
         if (recv_task.done ()):
             # A message slipped through
             initial_message = recv_task.result ()
         else:
             recv_task.cancel ()
         peer_client = new_client.peer_arrival_future.result ()
-        print (f"ws_connected: client {id (new_client)}: peer {id (peer_client)} connected")
+        logger.info (f"ws_connected: client {id (new_client)}: peer {id (peer_client)} connected via {path}")
     else:
         if (len (client_list) > 1):
-            print (f"ws_connected: client {id (new_client)}: meetup ID {meetup_id} "
-                   f"already has {len (client_list)} clients - CLOSING!")
+            logger.warn (f"ws_connected: client {id (new_client)}: meetup ID {meetup_id} "
+                         f"already has {len (client_list)} clients - CLOSING!")
             return
         client_list.append (new_client)
         peer_client = client_list [0]
-        print (f"ws_connected: client {id (new_client)}: signalling waiting peer {id (peer_client)}")
+        logger.debug (f"ws_connected: client {id (new_client)}: signalling waiting peer {id (peer_client)}")
         peer_client.peer_arrival_future.set_result (new_client)
 
-    print (f"ws_connected: client {id (new_client)}: Starting ws_reader()...")
+    logger.debug (f"ws_connected: client {id (new_client)}: Starting ws_reader()...")
     try:
         await ws_reader (new_client, peer_client, initial_message)
     except websockets.ConnectionClosed as cce:
-        print (f"ws_connected: client {id (new_client)} disconnected")
+        logger.info (f"ws_connected: client {id (new_client)} disconnected")
     except Exception as Ex:
-        print (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}")
+        logger.warn (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}")
         traceback.print_exc (file=sys.stdout)
     finally:
-        print (f"ws_connected: client {id (new_client)}: Cleaning up...")
+        logger.info (f"ws_connected: client {id (new_client)}: Cleaning up...")
         client_list.remove (new_client)
         if (peer_client.websocket.open):
             await peer_client.websocket.close (reason=f"The peer connection from {remote_address} closed")
@@ -106,18 +111,18 @@ async def get_hello_message (websocket):
     return message
 
 async def ws_reader (source_client, dest_client, initial_message):
-    print (f"micronet-ws-proxy-server: ws_reader: client {id (source_client)}: sending cached hello to client {id (dest_client)}")
-    print ("        ", source_client.hello_message)
+    logger.debug (f"ws_reader: client {id (source_client)}: sending cached hello to client {id (dest_client)}")
+    logger.debug ("        ", source_client.hello_message)
     await dest_client.websocket.send (json.dumps (source_client.hello_message))
-    print (f"micronet-ws-proxy-server: ws_reader: client {id (source_client)}: Routing all messages to {id (dest_client)}")
+    logger.info (f"ws_reader: client {id (source_client)}: Routing all messages to {id (dest_client)}")
     while True:
         if (initial_message):
             message = initial_message
             initial_message = None
         else:
             message = await source_client.websocket.recv ()
-        print (f"micronet-ws-proxy-server: ws_reader: client {id (source_client)}: Copying message to client {id (dest_client)}")
-        print (message)
+        logger.info (f"ws_reader: client {id (source_client)}: Copying message to client {id (dest_client)}")
+        logger.debug (message)
         await dest_client.websocket.send (message)
 
 def check_json_field (json_obj, field, field_type, required):
@@ -139,18 +144,18 @@ ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
 # Setup the proxy's cert
 proxy_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
-print ("Loading proxy certificate from", proxy_cert_path)
+logger.info ("Loading proxy certificate from %s", proxy_cert_path)
 ssl_context.load_cert_chain (proxy_cert_path)
 
 # Enable client cert verification
 root_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem')
-print ("Loading CA certificate from", root_cert_path)
+logger.info ("Loading CA certificate from %s", root_cert_path)
 ssl_context.load_verify_locations (cafile = root_cert_path)
 ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
 websocket = websockets.serve (ws_connected, 'localhost', proxy_port, ssl=ssl_context)
 
-print (f"Starting micronets websocket proxy on port {proxy_port}...")
+logger.info (f"Starting micronets websocket proxy on port {proxy_port}...")
 asyncio.get_event_loop ().run_until_complete (websocket)
 asyncio.get_event_loop ().run_forever ()
