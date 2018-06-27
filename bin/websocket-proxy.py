@@ -13,15 +13,17 @@ import ssl
 import configparser
 from quart import json
 
+bin_path = pathlib.Path (__file__).parent
+
 # Change these if/when necessary
 
-logfile_path = pathlib.Path (__file__).parent.parent.joinpath ('ws-proxy.log')
+logfile_path = bin_path.parent.joinpath ('ws-proxy.log')
 logfile_mode = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
 proxy_bind_address = "localhost"
 proxy_port = 5050
 proxy_service_prefix = "/micronets/v1/ws-proxy/"
-proxy_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
-root_cert_path = pathlib.Path (__file__).parent.parent.joinpath ('lib/micronets-ws-root.cert.pem')
+proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
+root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
 
 meetup_table = {}
 

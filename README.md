@@ -75,11 +75,11 @@ must be added to the Micronet's Manager CA list.
 ### To generate the cert to be used by the test client:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename test/lib/micronets-ws-test-client \
+bin/gen-ocf-leaf-cert --cert-basename lib/micronets-ws-test-client \
     --subject-org-name "Micronets Websocket Test Client Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-ws-root.cert.pem \
     --ca-keyfile lib/micronets-ws-root.key.pem
 
-cat test/lib/micronets-ws-test-client.cert.pem testlib/micronets-ws-test-client.key.pem > test/lib/micronets-ws-test-client.pkeycert.pem
+cat lib/micronets-ws-test-client.cert.pem lib/micronets-ws-test-client.key.pem > lib/micronets-ws-test-client.pkeycert.pem
 ```
