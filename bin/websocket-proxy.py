@@ -12,14 +12,14 @@ import pathlib
 import ssl
 import configparser
 
-from threading import Timer
 from quart import json
 
 bin_path = pathlib.Path (__file__).parent
 
 # Change these if/when necessary
 
-logfile_path = bin_path.parent.joinpath ('ws-proxy.log')
+# logfile_path = bin_path.parent.joinpath ('ws-proxy.log')
+logfile_path = None
 logfile_mode = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
 proxy_bind_address = "localhost"
 proxy_port = 5050
@@ -30,16 +30,19 @@ root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
 meetup_table = {}
 
 class WSClient:
-    def __init__ (self, meetup_id, websocket, hello_message=None, peer_client=None, ping_timeout_limit=10):
+    def __init__ (self, meetup_id, websocket, hello_message=None, peer_client=None, 
+                        ping_interval_s = 10, ping_timeout_s=10):
         self.meetup_id = meetup_id
         self.websocket = websocket
         self.hello_message = hello_message
         self.peer_arrival_future = None
-        self.ping_timeout_limit_s = ping_timeout_limit
+        self.ping_interval_s = ping_interval_s
+        self.ping_timeout_s = ping_timeout_s
         self.ping_timeout_timer = None
         self.hello_message = hello_message
         self.peer_client = peer_client
-        self.start_ping_timer ()
+        # self.start_ping_timer ()
+        self.start_pings ()
 
     async def recv_hello_message (self):
         raw_message = await self.websocket.recv ()
@@ -83,12 +86,38 @@ class WSClient:
             self.peer_arrival_future.set_result (peer)
         self.peer_client = peer
 
+    def start_pings (self):
+        logger.debug (f"ws_client {id (self)}: Starting pings every {self.ping_interval_s} seconds ({self.ping_timeout_s} timout)")
+        asyncio.get_event_loop ().create_task (self.ping_peer ())
+
+    async def ping_peer (self):
+        while (self.ping_interval_s and self.ping_interval_s > 0):
+            ping_send_time = asyncio.get_event_loop ().time()
+            logger.debug (f"ws_client {id (self)}: ping_peer: Sending ping...")
+            pong_waiter = await (self.websocket.ping ())
+            logger.debug (f"ws_client {id (self)}: ping_peer: Waiting for pong...")
+            done, pending = await asyncio.wait ([pong_waiter], timeout=self.ping_timeout_s)
+            if (not pong_waiter in done):
+                logger.warn (f"ws_client {id (self)}: ping_peer: ping time out - DISCONNECTING")
+                await self.websocket.close (code=1002, reason=f"ping timed out ({self.ping_timeout_s} seconds)")
+                pong_waiter.cancel ()
+                return
+            pong_received_time = asyncio.get_event_loop ().time ()
+            logger.debug (f"ws_client {id (self)}: ping_peer: pong received after {pong_received_time-ping_send_time}")
+            wait_time = ping_send_time + self.ping_interval_s - pong_received_time
+            logger.debug (f"ws_client {id (self)}: ping_peer: Sending next ping in {wait_time} seconds...")
+            await asyncio.sleep (wait_time)
+
+    def cancel_ping_timer (self):
+        if self.ping_timeout_timer:
+            self.ping_timeout_timer.cancel ()
+            self.ping_timeout_timer = None
+
     def start_ping_timer (self):
+        self.cancel_ping_timer ()
         if (self.ping_timeout_limit_s and self.ping_timeout_limit_s > 0):
-            if self.ping_timeout_timer:
-                self.ping_timeout_timer.cancel ()
-            self.ping_timeout_timer = Timer (self.ping_timeout_limit_s, self.ping_timeout)
-            self.ping_timeout_timer.start ()
+            self.ping_timeout_timer = asyncio.get_event_loop ().call_later (self.ping_timeout_limit_s,
+                                                                            self.ping_timeout)
 
     def ping_timeout (self):
         logger.warn (f"ws_client {id (self)}: ping timeout")
@@ -113,6 +142,7 @@ class WSClient:
         
 async def ws_connected (websocket, path):
     try:
+        new_client = None
         remote_address = websocket.remote_address
         logger.info (f"ws_connected: from {remote_address}, {path}")
         if (not path.startswith (proxy_service_prefix)):
@@ -131,6 +161,7 @@ async def ws_connected (websocket, path):
 
         new_client = WSClient (meetup_id, websocket)
         client_list.append (new_client)
+        # await new_client.start_pings ()
 
         logger.debug (f"ws_connected: client {id (new_client)}: (meetup_id: {meetup_id})")
         logger.debug (f"ws_connected: client {id (new_client)}: Waiting for HELLO message...")
@@ -159,7 +190,8 @@ async def ws_connected (websocket, path):
         traceback.print_exc (file=sys.stdout)
     finally:
         logger.info (f"ws_connected: client {id (new_client)}: Cleaning up...")
-        client_list.remove (new_client)
+        if (new_client in client_list):
+            client_list.remove (new_client)
         await new_client.clean_up ()
     # When this function returns, the websocket is closed
 
