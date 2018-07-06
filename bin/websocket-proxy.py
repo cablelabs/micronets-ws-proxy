@@ -40,7 +40,6 @@ class WSClient:
         self.ping_timeout_s = ping_timeout_s
         self.hello_message = hello_message
         self.peer_client = peer_client
-        # self.start_ping_timer ()
         self.start_pings ()
 
     async def recv_hello_message (self):
@@ -105,7 +104,7 @@ class WSClient:
             done, pending = await asyncio.wait ([pong_waiter], timeout=self.ping_timeout_s)
             if (not pong_waiter in done):
                 logger.warn (f"ws_client {id (self)}: ping_peer: ping time out - DISCONNECTING")
-                await self.websocket.close (code=1002, reason=f"ping timed out ({self.ping_timeout_s} seconds)")
+                await self.close_websocket (1002, f"ping timed out ({self.ping_timeout_s} seconds)")
                 pong_waiter.cancel ()
                 return
             pong_received_time = asyncio.get_event_loop ().time ()
@@ -125,28 +124,27 @@ class WSClient:
             logger.debug (message)
             await self.peer_client.send_message (message)
 
-    async def close_websocket (self):
+    def cleanup_before_close (self):
+        self.stop_pings ()
+
+    async def close_websocket (self, reasonCode, reasonPhrase):
         try:
             logger.debug (f"ws_client {id (self)}: close_websocket: closing websocket")
-            await self.websocket.close (reason=f"The peer connection from {self.websocket.remote_address} closed")
+            self.cleanup_before_close ()
+            await self.websocket.close (code = reasonCode, reason = reasonPhrase)
         except Exception as ex:
             logger.debug (f"ws_client {id (self)}: close_websocket: on closing connection: {ex}")
-
-    async def clean_up (self):
-        self.stop_pings ()
-        await self.close_websocket ()
-        await self.peer_client.peer_disconnected (self)
 
     async def send_message (self, message):
         return await self.websocket.send (message)
 
     async def peer_disconnected (self, peer):
-        self.stop_pings ()
-        await self.close_websocket ()
+        await self.close_websocket (reasonCode=1002, reasonPhrase=f"the peer websocket disconnected")
 
 async def ws_connected (websocket, path):
     try:
         new_client = None
+        peer_client = None
         remote_address = websocket.remote_address
         logger.info (f"ws_connected: from {remote_address}, {path}")
         if (not path.startswith (proxy_service_prefix)):
@@ -177,7 +175,7 @@ async def ws_connected (websocket, path):
 
         if (len (client_list) == 1):
             logger.debug (f"ws_connected: client {id (new_client)} is the first connected to {path}")
-            await new_client.wait_for_peer ()
+            peer_client = await new_client.wait_for_peer ()
         else:
             logger.debug (f"ws_connected: client {id (new_client)} is the second connected to {path}")
             peer_client = client_list [0]
@@ -197,7 +195,9 @@ async def ws_connected (websocket, path):
         if (new_client in client_list):
             client_list.remove (new_client)
         if (new_client):
-            await new_client.clean_up ()
+            new_client.cleanup_before_close ()
+        if (peer_client):
+            await peer_client.peer_disconnected (new_client)
     # When this function returns, the websocket is closed
 
 def check_json_field (json_obj, field, field_type, required):
