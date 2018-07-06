@@ -132,6 +132,8 @@ class MyHTTPHandler (BaseHTTPRequestHandler):
         self.relay_message ()
     def do_PUT (self):
         self.relay_message ()
+    def do_DELETE (self):
+        self.relay_message ()
 
     def relay_message (self):
         global message_id
@@ -150,19 +152,18 @@ class MyHTTPHandler (BaseHTTPRequestHandler):
                     'method': self.command,
                     'path': self.path}
 
-        headers = []
-        for header_name, header_value in self.headers.items ():
-            headers.append ({'name': header_name, 'value': header_value})
-        if (len (headers) > 0):
-            message ['headers'] = headers
-
         content_length_val = self.headers ['Content-Length']
         if (content_length_val):
             content_length = int (content_length_val)
+            del self.headers ['Content-Length']
             if (content_length > 0):
-                data_format = self.headers ['Content-Type']
-                if (not data_format):
+                if 'Content-Type' in self.headers:
+                    data_format = self.headers ['Content-Type']
+                    del self.headers ['Content-Type']
+                else:
                     data_format = "application/json"
+                if 'Content-Encoding' in self.headers:
+                    del self.headers ['Content-Encoding']
                 message_payload = self.rfile.read (int (content_length))
                 print (f"  Payload: {message_payload}")
                 message ['dataFormat'] = data_format
@@ -172,13 +173,18 @@ class MyHTTPHandler (BaseHTTPRequestHandler):
                     encoded_payload = message_payload.decode ('utf-8')
                 message ['messageBody'] = encoded_payload
 
+        headers = []
+        for header_name, header_value in self.headers.items ():
+            headers.append ({'name': header_name, 'value': header_value})
+        if (len (headers) > 0):
+            message ['headers'] = headers
         message_json = json.dumps ({'message': message}, indent=2)
 
         print (f"ws-test-client: Relaying REST request to peer: {message_json}")
         request_future = asyncio.run_coroutine_threadsafe (send_rest_message (websocket, message_json), 
                                                            event_loop)
         print (f"ws-test-client: Waiting for send to complete...")
-        request_future.result () # Wait for the result
+        request_future.result ()
 
         cond = threading.Condition ()
         pending_requests [request_id] = cond
