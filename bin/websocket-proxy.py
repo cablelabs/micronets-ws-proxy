@@ -6,7 +6,6 @@ import logging
 import asyncio
 import websockets
 import time
-import traceback
 import sys
 import pathlib
 import ssl
@@ -36,9 +35,9 @@ class WSClient:
         self.websocket = websocket
         self.hello_message = hello_message
         self.peer_arrival_future = None
+        self.ping_task = None
         self.ping_interval_s = ping_interval_s
         self.ping_timeout_s = ping_timeout_s
-        self.ping_timeout_timer = None
         self.hello_message = hello_message
         self.peer_client = peer_client
         # self.start_ping_timer ()
@@ -69,7 +68,7 @@ class WSClient:
         done, pending = await asyncio.wait( [self.peer_arrival_future, recv_task],
                                             return_when=asyncio.FIRST_COMPLETED)
         if (not self.peer_arrival_future in done):
-            raise Exception (f"Client {id (self)} failed/recv-ed data before peer could attach to {path}")
+            raise Exception (f"Client {id (self)} failed/recv-ed data before peer could attach to {self.meetup_id}")
         if (recv_task.done ()):
             initial_message = recv_task.result ()
             if (initial_message):
@@ -88,11 +87,18 @@ class WSClient:
 
     def start_pings (self):
         logger.debug (f"ws_client {id (self)}: Starting pings every {self.ping_interval_s} seconds ({self.ping_timeout_s} timout)")
-        asyncio.get_event_loop ().create_task (self.ping_peer ())
+        self.stop_pings ()
+        self.ping_task = asyncio.get_event_loop ().create_task (self.ping_peer ())
+
+    def stop_pings (self):
+        if (self.ping_task):
+            logger.debug (f"ws_client {id (self)}: Stopping pings")
+            self.ping_task.cancel ()
+            self.ping_task = None
 
     async def ping_peer (self):
         while (self.ping_interval_s and self.ping_interval_s > 0):
-            ping_send_time = asyncio.get_event_loop ().time()
+            ping_send_time = asyncio.get_event_loop ().time ()
             logger.debug (f"ws_client {id (self)}: ping_peer: Sending ping...")
             pong_waiter = await (self.websocket.ping ())
             logger.debug (f"ws_client {id (self)}: ping_peer: Waiting for pong...")
@@ -108,30 +114,9 @@ class WSClient:
             logger.debug (f"ws_client {id (self)}: ping_peer: Sending next ping in {wait_time} seconds...")
             await asyncio.sleep (wait_time)
 
-    def cancel_ping_timer (self):
-        if self.ping_timeout_timer:
-            self.ping_timeout_timer.cancel ()
-            self.ping_timeout_timer = None
-
-    def start_ping_timer (self):
-        self.cancel_ping_timer ()
-        if (self.ping_timeout_limit_s and self.ping_timeout_limit_s > 0):
-            self.ping_timeout_timer = asyncio.get_event_loop ().call_later (self.ping_timeout_limit_s,
-                                                                            self.ping_timeout)
-
-    def ping_timeout (self):
-        logger.warn (f"ws_client {id (self)}: ping timeout")
-
-    async def clean_up (self):
-        if (self.websocket.open):
-            await self.websocket.close (reason=f"The peer connection from {self.websocket.remote_address} closed")
-
-    async def send_message (self, message):
-        return await self.websocket.send (message)
-
     async def relay_messages_to_peer (self):
         logger.debug (f"ws_client {id (self)}: relay_messages_to_peer: sending cached hello to client {id (self.peer_client)}")
-        logger.debug ("        ", self.hello_message)
+        logger.debug ("        %s", self.hello_message)
         await self.peer_client.send_message (json.dumps (self.hello_message))
         logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Routing all messages to {id (self.peer_client)}")
         while True:
@@ -139,7 +124,26 @@ class WSClient:
             logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Copying message to client {id (self.peer_client)}")
             logger.debug (message)
             await self.peer_client.send_message (message)
-        
+
+    async def close_websocket (self):
+        try:
+            logger.debug (f"ws_client {id (self)}: close_websocket: closing websocket")
+            await self.websocket.close (reason=f"The peer connection from {self.websocket.remote_address} closed")
+        except Exception as ex:
+            logger.debug (f"ws_client {id (self)}: close_websocket: on closing connection: {ex}")
+
+    async def clean_up (self):
+        self.stop_pings ()
+        await self.close_websocket ()
+        await self.peer_client.peer_disconnected (self)
+
+    async def send_message (self, message):
+        return await self.websocket.send (message)
+
+    async def peer_disconnected (self, peer):
+        self.stop_pings ()
+        await self.close_websocket ()
+
 async def ws_connected (websocket, path):
     try:
         new_client = None
@@ -186,13 +190,14 @@ async def ws_connected (websocket, path):
     except websockets.ConnectionClosed as cce:
         logger.info (f"ws_connected: client {id (new_client)} disconnected")
     except Exception as Ex:
-        logger.warn (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}")
-        traceback.print_exc (file=sys.stdout)
+        logger.warn (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}",
+                     exc_info=True)
     finally:
         logger.info (f"ws_connected: client {id (new_client)}: Cleaning up...")
         if (new_client in client_list):
             client_list.remove (new_client)
-        await new_client.clean_up ()
+        if (new_client):
+            await new_client.clean_up ()
     # When this function returns, the websocket is closed
 
 def check_json_field (json_obj, field, field_type, required):
