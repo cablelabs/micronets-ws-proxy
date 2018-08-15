@@ -1,4 +1,4 @@
-# Micronets DHCP Test Readme
+# Micronets Websocket Proxy Readme
 
 ## Setting up the proxy
 
