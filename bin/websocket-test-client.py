@@ -43,9 +43,9 @@ async def init_connection (ssl_context, dest):
         scheme = 'wss'
     else:
         scheme = 'ws'
-    print (f"ws-test-client: init_connect opening {dest}...")
+    print (f"ws-test-client: Opening websocket to {dest}...")
     ws = await websockets.connect (dest, ssl=ssl_context)
-    print (f"ws-test-client: init_connect opened {dest}.")
+    print (f"ws-test-client: Connected to {dest}.")
     print (f"ws-test-client: Sending HELLO message...")
     await send_hello_message (ws)
     print (f"ws-test-client: Waiting for HELLO message...")
@@ -268,13 +268,13 @@ message_id = 0
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_CLIENT)
 
 # Setup the client's cert
-print ("Loading test client certificate from", args.client_cert)
-ssl_context.load_cert_chain (args.client_cert)
+print ("Loading test client certificate from", args.client_cert.name)
+ssl_context.load_cert_chain (args.client_cert.name)
 
 # Verify peer certs using the websocket root as the CA
-print ("Loading CA certificate from", args.ca_cert)
+print ("Loading CA certificate from", args.ca_cert.name)
 
-ssl_context.load_verify_locations (cafile = args.ca_cert)
+ssl_context.load_verify_locations (cafile = args.ca_cert.name)
 ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
