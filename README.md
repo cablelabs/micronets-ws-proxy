@@ -139,6 +139,7 @@ cd ~/projects/micronets
 git clone git@github.com:cablelabs/micronets-dhcp.git
 mkvirtualenv -r micronets-dhcp/requirements.txt -a $PWD/micronets-dhcp -p $(which python3) micronets-dhcp
 workon -c micronets-dhcp
+pip install -r requirements.txt
 ```
 
 #### 1.3.2 Configuring the service to connect to the websocket proxy
@@ -201,6 +202,7 @@ mkdir -p ~/projects/micronets
 cd ~/projects/micronets
 git clone git@github.com:cablelabs/micronets-websocket-proxy.git
 mkvirtualenv -r micronets-websocket-proxy/requirements.txt -a $PWD/micronets-websocket-proxy -p $(which python3) micronets-websocket-proxy
+pip install -r requirements.txt
 ```
 
 #### 1.4.2 Connecting the websocket test client to the proxy (using the same URI as a connected micronets gateway)
