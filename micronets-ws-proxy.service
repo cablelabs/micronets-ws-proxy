@@ -1,0 +1,24 @@
+# To install and run this .service file:
+#   sudo systemctl enable $PWD/micronets-ws-proxy.service
+#   sudo systemctl daemon-reload 
+#   sudo systemctl start micronets-ws-proxy.service
+
+[Unit]
+Description=Micronets Websocket Proxy Service
+After=network-online.target
+
+[Service]
+Type=idle
+# Note: These need to be modified to reflect the system location and installed virtualenv location
+WorkingDirectory=/home/micronets-dev/projects/micronets/micronets-websocket-proxy
+ExecStart=/home/micronets-dev/projects/micronets/micronets-websocket-proxy/virtualenv/bin/python bin/websocket-proxy.py
+User=micronets-dev
+Group=micronets-dev
+StandardOutput=syslog
+StandardError=syslog
+# SyslogFacility=none
+SyslogIdentifier=micronets-ws-proxy
+SyslogLevel=debug
+
+[Install]
+WantedBy=multi-user.target

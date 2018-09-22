@@ -14,10 +14,7 @@ bin_path = pathlib.Path (__file__).parent
 
 # Change these if/when necessary (TODO: integrate argparse support)
 
-# logfile_path = bin_path.parent.joinpath ('ws-proxy.log')
-logfile_path = None
-logfile_mode = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
-proxy_bind_address = "localhost"
+proxy_bind_address = "0.0.0.0" # Use "localhost" when testing...
 proxy_port = 5050
 proxy_service_prefix = "/micronets/v1/ws-proxy/"
 proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
@@ -234,9 +231,6 @@ def check_json_field (json_obj, field, field_type, required):
     if not isinstance (field_val, field_type):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
-
-logging.basicConfig (level=logging.DEBUG, filename=logfile_path, filemode=logfile_mode,
-                     format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 
 logger = logging.getLogger ('micronets-ws-proxy')
 
