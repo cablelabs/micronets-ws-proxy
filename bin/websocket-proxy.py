@@ -5,17 +5,14 @@
 import logging
 import asyncio
 import websockets
-import time
-import sys
 import pathlib
 import ssl
-import configparser
 
 from quart import json
 
 bin_path = pathlib.Path (__file__).parent
 
-# Change these if/when necessary
+# Change these if/when necessary (TODO: integrate argparse support)
 
 # logfile_path = bin_path.parent.joinpath ('ws-proxy.log')
 logfile_path = None
@@ -34,7 +31,8 @@ class WSClient:
         self.meetup_id = meetup_id
         self.websocket = websocket
         self.hello_message = hello_message
-        self.peer_arrival_future = None
+        self.peer_arrival_future = asyncio.Future ()
+        self.ping_timeout_future = asyncio.Future ()
         self.ping_task = None
         self.ping_interval_s = ping_interval_s
         self.ping_timeout_s = ping_timeout_s
@@ -60,21 +58,20 @@ class WSClient:
         return self.hello_message
     
     async def wait_for_peer (self):
-        self.peer_arrival_future = asyncio.get_event_loop ().create_future ()
         recv_task = asyncio.get_event_loop ().create_task (self.websocket.recv ())
         logger.info (f"ws_client {id (self)}: wait_for_peer: waiting for peer on {self.meetup_id}...")
         # We need to have a call to recv() in order to know if the socket closes while we're waiting
-        done, pending = await asyncio.wait( [self.peer_arrival_future, recv_task],
+        done, pending = await asyncio.wait( [self.peer_arrival_future, recv_task, self.ping_timeout_future],
                                             return_when=asyncio.FIRST_COMPLETED)
-        if (not self.peer_arrival_future in done):
-            raise Exception (f"Client {id (self)} failed/recv-ed data before peer could attach to {self.meetup_id}")
         if (recv_task.done ()):
-            initial_message = recv_task.result ()
-            if (initial_message):
+            message = recv_task.result()  # This will throw an exception if the task raised one
+            if (message):
                 # A message slipped through
-                logger.warn (f"ws_client {id (self)}: wait_for_peer: A message was received while waiting for a peer - DROPPING: {message}")
+                logger.warning (f"ws_client {id (self)}: wait_for_peer: A message was received while waiting for a peer - DROPPING: {message}")
         else:
             recv_task.cancel ()
+        if (not self.peer_arrival_future in done):
+            raise Exception (f"Client {id (self)} failed/recv-ed data before a peer could attach to {self.meetup_id}")
         self.peer_client = self.peer_arrival_future.result ()
         self.peer_arrival_future = None
         return self.peer_client
@@ -103,9 +100,12 @@ class WSClient:
             logger.debug (f"ws_client {id (self)}: ping_peer: Waiting for pong...")
             done, pending = await asyncio.wait ([pong_waiter], timeout=self.ping_timeout_s)
             if (not pong_waiter in done):
-                logger.warn (f"ws_client {id (self)}: ping_peer: ping time out - DISCONNECTING")
-                await self.close_websocket (1002, f"ping timed out ({self.ping_timeout_s} seconds)")
+                logger.warning (f"ws_client {id (self)}: ping_peer: ping timeout - DISCONNECTING")
                 pong_waiter.cancel ()
+                close_reason = f"Ping timeed out ({self.ping_timeout_s} seconds)"
+                if self.ping_timeout_future:
+                    self.ping_timeout_future.set_result (close_reason)
+                await self.close_websocket (1002, close_reason)
                 return
             pong_received_time = asyncio.get_event_loop ().time ()
             logger.debug (f"ws_client {id (self)}: ping_peer: pong received after {pong_received_time-ping_send_time}")
@@ -113,27 +113,52 @@ class WSClient:
             logger.debug (f"ws_client {id (self)}: ping_peer: Sending next ping in {wait_time} seconds...")
             await asyncio.sleep (wait_time)
 
+    async def communicate_with_peer (self):
+        relay_task = self.relay_messages_to_peer ()
+        done, pending = await asyncio.wait ([self.ping_timeout_future, relay_task],
+                                            return_when=asyncio.FIRST_COMPLETED)
+        if relay_task in done:
+            logger.info (f"ws_client {id (self)}: communicate_with_peer: "
+                         f"relay_messages_to_peer completed/terminated")
+            self.ping_timeout_future.cancel()
+            self.ping_timeout_future = None
+            # Note: result should throw the exception returned via the Future if there's one
+            #       See https://docs.python.org/3.6/library/asyncio-task.html#asyncio.Future
+            return relay_task.result ()
+
+        if self.ping_timeout_future in done:
+            relay_task.cancel ()
+            temp_future = self.ping_timeout_future
+            self.ping_timeout_future = None
+            result = temp_future.result ()
+            logger.info (f"ws_client {id (self)}: communicate_with_peer: "
+                         f"communication terminated with reason: {result}")
+            raise Exception (f"communication was cancelled: {result}")
+
     async def relay_messages_to_peer (self):
-        logger.debug (f"ws_client {id (self)}: relay_messages_to_peer: sending cached hello to client {id (self.peer_client)}")
-        logger.debug ("        %s", self.hello_message)
-        await self.peer_client.send_message (json.dumps (self.hello_message))
-        logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Routing all messages to {id (self.peer_client)}")
-        while True:
-            message = await self.websocket.recv ()
-            logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Copying message to client {id (self.peer_client)}")
-            logger.debug (message)
-            await self.peer_client.send_message (message)
+        try:
+            logger.debug (f"ws_client {id (self)}: relay_messages_to_peer: sending cached hello to client {id (self.peer_client)}")
+            logger.debug ("        %s", self.hello_message)
+            await self.peer_client.send_message (json.dumps (self.hello_message))
+            logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Routing all messages to {id (self.peer_client)}")
+            while True:
+                message = await self.websocket.recv ()
+                logger.info (f"ws_client {id (self)}: relay_messages_to_peer: Copying message to client {id (self.peer_client)}")
+                logger.debug (message)
+                await self.peer_client.send_message (message)
+        finally:
+            logger.info(f"ws_client {id (self)}: relay_messages_to_peer: terminating")
 
     def cleanup_before_close (self):
         self.stop_pings ()
 
     async def close_websocket (self, reasonCode, reasonPhrase):
         try:
-            logger.debug (f"ws_client {id (self)}: close_websocket: closing websocket")
             self.cleanup_before_close ()
+            logger.debug (f"ws_client {id (self)}: close_websocket: closing websocket")
             await self.websocket.close (code = reasonCode, reason = reasonPhrase)
         except Exception as ex:
-            logger.debug (f"ws_client {id (self)}: close_websocket: on closing connection: {ex}")
+            logger.debug (f"ws_client {id (self)}: close_websocket: Exception on closing connection: {ex}")
 
     async def send_message (self, message):
         return await self.websocket.send (message)
@@ -148,7 +173,7 @@ async def ws_connected (websocket, path):
         remote_address = websocket.remote_address
         logger.info (f"ws_connected: from {remote_address}, {path}")
         if (not path.startswith (proxy_service_prefix)):
-            logger.warn (f"ws_connected: Unsupported path: {proxy_service_prefix} - CLOSING!")
+            logger.warning (f"ws_connected: Unsupported path: {proxy_service_prefix} - CLOSING!")
             return
         meetup_id = path [len (proxy_service_prefix):]
         if (not meetup_id in meetup_table):
@@ -157,13 +182,12 @@ async def ws_connected (websocket, path):
         else:
             client_list = meetup_table [meetup_id]
         if (len (client_list) >= 2):
-            logger.warn (f"ws_connected: client {id (new_client)}: meetup ID {meetup_id} "
-                         f"already has {len (client_list)} clients - CLOSING connection from {remote_address}.")
+            logger.warning (f"ws_connected: client {id (new_client)}: meetup ID {meetup_id} "
+                            f"already has {len (client_list)} clients - CLOSING connection from {remote_address}.")
             return
 
         new_client = WSClient (meetup_id, websocket)
         client_list.append (new_client)
-        # await new_client.start_pings ()
 
         logger.debug (f"ws_connected: client {id (new_client)}: (meetup_id: {meetup_id})")
         logger.debug (f"ws_connected: client {id (new_client)}: Waiting for HELLO message...")
@@ -182,14 +206,13 @@ async def ws_connected (websocket, path):
             new_client.set_peer (peer_client)
             peer_client.set_peer (new_client)
 
-        # Will just relay until someone disconnects...
-        await new_client.relay_messages_to_peer ()
+        # Will just relay data between the clients until someone disconnects...
+        await new_client.communicate_with_peer ()
         logger.info (f"ws_connected: client {id (new_client)} relay_messages_to_peer() returned")
     except websockets.ConnectionClosed as cce:
-        logger.info (f"ws_connected: client {id (new_client)} disconnected")
+        logger.info (f"ws_connected: client {id (new_client)} disconnected normally")
     except Exception as Ex:
-        logger.warn (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}",
-                     exc_info=True)
+        logger.info (f"ws_connected: client {id (new_client)}: Caught an exception from ws_reader: {Ex}")
     finally:
         logger.info (f"ws_connected: client {id (new_client)}: Cleaning up...")
         if (new_client in client_list):
