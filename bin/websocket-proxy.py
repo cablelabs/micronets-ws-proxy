@@ -22,6 +22,9 @@ root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
 
 meetup_table = {}
 
+logging.basicConfig (level='INFO',format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+logger = logging.getLogger ('micronets-ws-proxy')
+
 class WSClient:
     def __init__ (self, meetup_id, websocket, hello_message=None, peer_client=None, 
                         ping_interval_s = 10, ping_timeout_s=10):
@@ -99,7 +102,7 @@ class WSClient:
             if (not pong_waiter in done):
                 logger.warning (f"ws_client {id (self)}: ping_peer: ping timeout - DISCONNECTING")
                 pong_waiter.cancel ()
-                close_reason = f"Ping timeed out ({self.ping_timeout_s} seconds)"
+                close_reason = f"Ping timed out ({self.ping_timeout_s} seconds)"
                 if self.ping_timeout_future:
                     self.ping_timeout_future.set_result (close_reason)
                 await self.close_websocket (1002, close_reason)
@@ -231,8 +234,6 @@ def check_json_field (json_obj, field, field_type, required):
     if not isinstance (field_val, field_type):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
-
-logger = logging.getLogger ('micronets-ws-proxy')
 
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
