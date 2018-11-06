@@ -10,7 +10,7 @@ This will produce the root certificate and key for validating/generating
 leaf certificates used by certain micronets API:
 
 ```
-bin/gen-ocf-root-cert --cert-basename lib/micronets-api-root \
+bin/gen-root-cert --cert-basename lib/micronets-api-root \
     --subject-org-name "Micronets API Root Cert" \
     --expiration-in-days 3650
 ```
@@ -31,7 +31,7 @@ components.
 ### 1.1 Generating API client certificates:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename lib/micronets-api-client \
+bin/gen-leaf-cert --cert-basename lib/micronets-api-client \
     --subject-org-name "Micronets API Client Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-api-root.cert.pem \
@@ -55,7 +55,7 @@ This will produce the root certificate and key for validating/generating
 leaf certificates used by peers of the websocket proxy:
 
 ```
-bin/gen-ocf-root-cert --cert-basename lib/micronets-ws-root \
+bin/gen-root-cert --cert-basename lib/micronets-ws-root \
     --subject-org-name "Micronets Websocket Root Cert" \
     --expiration-in-days 3650
 ```
@@ -72,7 +72,7 @@ websocket peers.
 #### 2.1.2 To generate the cert to be used for the Websocket Proxy:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename lib/micronets-ws-proxy \
+bin/gen-leaf-cert --cert-basename lib/micronets-ws-proxy \
     --subject-org-name "Micronets Websocket Proxy Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-ws-root.cert.pem \
@@ -89,7 +89,7 @@ CA enabled for the proxy)
 #### 2.1.3 Generating the cert to be used for the Micronets Manager:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename lib/micronets-manager \
+bin/gen-leaf-cert --cert-basename lib/micronets-manager \
     --subject-org-name "Micronets Manager Websocket Client Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-ws-root.cert.pem \
@@ -105,7 +105,7 @@ must be added to the Micronet's Manager CA list.
 #### 2.1.4 To generate the cert to be used for the Micronets Gateway Service:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename lib/micronets-gateway-service \
+bin/gen-leaf-cert --cert-basename lib/micronets-gateway-service \
     --subject-org-name "Micronets Gateway Service Websocket Client Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-ws-root.cert.pem \
@@ -121,7 +121,7 @@ must be added to the Micronet's Manager CA list.
 #### 2.1.5 To generate the cert to be used by the test client:
 
 ```
-bin/gen-ocf-leaf-cert --cert-basename lib/micronets-ws-test-client \
+bin/gen-leaf-cert --cert-basename lib/micronets-ws-test-client \
     --subject-org-name "Micronets Websocket Test Client Cert" \
     --expiration-in-days 3650 \
     --ca-certfile lib/micronets-ws-root.cert.pem \
