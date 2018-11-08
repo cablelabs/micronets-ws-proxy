@@ -19,18 +19,19 @@ proxy_port = 5050
 proxy_service_prefix = "/micronets/v1/ws-proxy/"
 proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
 root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
+report_interval_s = 0 # seconds, 0 to disable
 
 meetup_table = {}
 
 logging.basicConfig (level='INFO',format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 logger = logging.getLogger ('micronets-ws-proxy')
 
+
 class WSClient:
     def __init__ (self, meetup_id, websocket, hello_message=None, peer_client=None, 
                         ping_interval_s = 10, ping_timeout_s=10):
         self.meetup_id = meetup_id
         self.websocket = websocket
-        self.hello_message = hello_message
         self.peer_arrival_future = asyncio.Future ()
         self.ping_timeout_future = asyncio.Future ()
         self.ping_task = None
@@ -39,6 +40,15 @@ class WSClient:
         self.hello_message = hello_message
         self.peer_client = peer_client
         self.start_pings ()
+
+    def __str__ (self):
+        if self.hello_message and 'message' in self.hello_message and 'peerId' in self.hello_message['message']:
+            # TODO: REMOVE ME
+            logger.info (f"message: {self.hello_message}")
+            peer_id = self.hello_message ['message']['peerId']
+        else:
+            peer_id = "none"
+        return f"Client {id (self)} (peer: {peer_id}) @ {self.websocket.remote_address})"
 
     async def recv_hello_message (self):
         raw_message = await self.websocket.recv ()
@@ -189,6 +199,8 @@ async def ws_connected (websocket, path):
         new_client = WSClient (meetup_id, websocket)
         client_list.append (new_client)
 
+        perform_connection_report ()
+
         logger.debug (f"ws_connected: client {id (new_client)}: (meetup_id: {meetup_id})")
         logger.debug (f"ws_connected: client {id (new_client)}: Waiting for HELLO message...")
         hello_message = await new_client.recv_hello_message ()
@@ -198,13 +210,15 @@ async def ws_connected (websocket, path):
         # Here's where we'd add any accept criteria based on the HELLO message
 
         if (len (client_list) == 1):
-            logger.debug (f"ws_connected: client {id (new_client)} is the first connected to {path}")
+            logger.info (f"ws_connected: client {id (new_client)} is the first connected to {path}")
+            perform_connection_report ()
             peer_client = await new_client.wait_for_peer ()
         else:
-            logger.debug (f"ws_connected: client {id (new_client)} is the second connected to {path}")
+            logger.info (f"ws_connected: client {id (new_client)} is the second connected to {path}")
             peer_client = client_list [0]
             new_client.set_peer (peer_client)
             peer_client.set_peer (new_client)
+            perform_connection_report ()
 
         # Will just relay data between the clients until someone disconnects...
         await new_client.communicate_with_peer ()
@@ -217,10 +231,14 @@ async def ws_connected (websocket, path):
         logger.info (f"ws_connected: client {id (new_client)}: Cleaning up...")
         if (new_client in client_list):
             client_list.remove (new_client)
+            if len(client_list) == 0:
+                meetup_table.pop (meetup_id)
+            perform_connection_report()
         if (new_client):
             new_client.cleanup_before_close ()
         if (peer_client):
             await peer_client.peer_disconnected (new_client)
+
     # When this function returns, the websocket is closed
 
 def check_json_field (json_obj, field, field_type, required):
@@ -235,6 +253,34 @@ def check_json_field (json_obj, field, field_type, required):
         raise Exception (f"Field type for '{field}' field is not a {field_type}")
     return field_val
 
+def start_websocket_reporting (report_interval_s):
+    report_task = asyncio.get_event_loop ().create_task (perform_periodic_connection_reports (report_interval_s))
+
+def perform_connection_report ():
+        report = f"\n---------------------------------------------------------------------------------------\n"
+        report += "WEBSOCKET MEETUP TABLE REPORT FOR {}:{}/{}\n"\
+                  .format (proxy_bind_address, proxy_port, proxy_service_prefix)
+        for meetup_id, meetup_list in meetup_table.items():
+            report += "\n  MEETUP ID: {}\n".format (meetup_id)
+            if len(meetup_list) > 0:
+                client_1 = str (meetup_list[0])
+            else:
+                client_1 = "Not connected"
+            if len(meetup_list) > 1:
+                client_2 = str (meetup_list[1])
+            else:
+                client_2 = "Not connected"
+            report += "    Client 1: {}\n".format (client_1)
+            report += "    Client 2: {}\n".format (client_2)
+        report += f"----------------------------------------------------------------------------------------\n"
+        logger.info (report)
+
+async def perform_periodic_connection_reports (report_interval_s):
+    logger.info("Performing websocket connection reports every %s seconds", report_interval_s)
+    while True:
+        await asyncio.sleep (report_interval_s)
+        perform_connection_report ()
+
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
 # Setup the proxy's cert
@@ -248,6 +294,9 @@ ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
 websocket = websockets.serve (ws_connected, proxy_bind_address, proxy_port, ssl=ssl_context)
+
+if report_interval_s > 0:
+    start_websocket_reporting (report_interval_s)
 
 logger.info (f"Starting micronets websocket proxy on {proxy_bind_address} port {proxy_port}...")
 asyncio.get_event_loop ().run_until_complete (websocket)
