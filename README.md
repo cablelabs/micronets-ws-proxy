@@ -145,35 +145,54 @@ proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem
 root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
 ```
 
-#### 2.2.2 Starting the websocket proxy server
+#### 2.2.2 Setting up the websocket proxy environment
+
+The virtualenv with the library dependancies is setup by performing the following steps:
+
+From the python-infrastructure directory:
+```
+virtualenv --clear -p $(which python3.6) $PWD/virtualenv
+source virtualenv/bin/activate
+pip install -r requirements.txt 
+```
+
+And the systemctl service is installed with the following steps:
+```
+sudo systemctl enable $PWD/micronets-ws-proxy.service
+sudo systemctl daemon-reload
+```
+
+#### 2.2.3 Starting the websocket proxy server
 
 To start the server on the linode ws proxy server:
 
 ```
-ssh micronets-dev@74.207.229.106
-workon micronets-websocket-proxy
-nohup bin/websocket-proxy.py &
+sudo systemctl start micronets-ws-proxy.service
 ```
 
-#### 2.2.3 Checking the log/status of the proxy server
+To restart the server on the linode ws proxy server:
+
+```
+sudo systemctl restart micronets-ws-proxy.service
+```
+
+#### 2.2.4 Checking the log/status of the proxy server
 
 To monitor the log:
 
 ```
-tail -f ws-proxy.log
+sudo tail -f /var/log/syslog
 ```
 
-#### 2.2.4 Stopping the proxy server
+#### 2.2.5
 
-To kill the proxy server:
+To stop the proxy server:
 
 ```
-kill $(pidof python)
+sudo systemctl stop micronets-ws-proxy.service
 ````
 
-Note: This obviously needs to be improved. This will kill all python instances running
-
-### 2.3 Connecting an instance of the micronets-dhcp server to the websocket proxy
+### 2.3 Connecting an instance of the micronets gateway service to the websocket proxy
 
 The steps below are for testing using the mock DHCP adapter (a Micronet’s DHCP server that doesn’t actually write DHCP lease reservations or restart a real DHCP server). Setting the micronets DHCP server to create IP reservations for the dnsmasq DHCP server simply requires changing the DnsMasqTestingConfig instead of the MockTestingConfig.
 
@@ -182,16 +201,16 @@ The steps below are for testing using the mock DHCP adapter (a Micronet’s DHCP
 ```
 mkdir -p ~/projects/micronets
 cd ~/projects/micronets
-git clone git@github.com:cablelabs/micronets-dhcp.git
-mkvirtualenv -r micronets-dhcp/requirements.txt -a $PWD/micronets-dhcp -p $(which python3) micronets-dhcp
-workon -c micronets-dhcp
-pip install -r requirements.txt
+git clone git@github.com:cablelabs/micronets-gw.git
+cd micronets-gw
+mkvirtualenv -r micronets-gw-service/requirements.txt -a $PWD/micronets-gw-service -p $(which python3) micronets-gw-service
+workon -c micronets-gw-service
 ```
 
 #### 2.3.2 Configuring the service to connect to the websocket proxy
 
 ```
-workon micronets-dhcp
+workon micronets-gw-service
 nano -w config.py
 ```
 
@@ -217,38 +236,38 @@ class MockTestingConfig (BaseMockConfig):
 #### 2.3.5 Starting the DHCP server with the mock config
 
 ```
-FLASK_ENV=config.MockTestingConfig python runner.py
+python runner.py --config config.MockTestingConfig 
 ```
 
-The Micronets DHCP server will still listen on the configured LISTEN_HOSY/PORT as it normally does. But it also will connect to the designated micronet’s websocket proxy - so long as the proxy server is running and the client cert is accept (and the TLS connection/challenge is successful).
+The Micronets gateway service will still listen on the configured LISTEN_HOSY/PORT as it normally does. But it also will connect to the designated micronet’s websocket proxy - so long as the proxy server is running and the client cert is accept (and the TLS connection/challenge is successful).
 
-#### 2.3.6 Checking/following the micronets-dhcp log
+#### 2.3.6 Checking/following the micronets gateway service log
 
 ```
-tail -f micronets-dhcp.log
+tail -f micronets-gw.log
 ```
 
 A successful connection to the websocket proxy will look like this:
 
 ```
-micronets-dhcp-server: INFO WSConnector: init_connect opening wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001...
+micronets-gw-service: INFO WSConnector: init_connect opening wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001...
 websockets.protocol: DEBUG client - state = CONNECTING
 websockets.protocol: DEBUG client - event = connection_made(<asyncio.sslproto._SSLProtocolTransport object at 0x1103cb710>)
 websockets.protocol: DEBUG client - state = OPEN
-micronets-dhcp-server: INFO WSConnector: init_connect opened wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001.
-micronets-dhcp-server: INFO WSConnector Sending HELLO message...
+micronets-gw-service: INFO WSConnector: init_connect opened wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001.
+mmicronets-gw-service: INFO WSConnector Sending HELLO message...
 ```
 
 ### 2.4 Testing the micronets websocket proxy
 
-#### 2.4.1 Downloading the websocket source (containing the test client)
+#### 2.4.1 Downloading the micronets infrastructure source (containing the test client)
 
 ```
 mkdir -p ~/projects/micronets
 cd ~/projects/micronets
-git clone git@github.com:cablelabs/micronets-websocket-proxy.git
-mkvirtualenv -r micronets-websocket-proxy/requirements.txt -a $PWD/micronets-websocket-proxy -p $(which python3) micronets-websocket-proxy
-pip install -r requirements.txt
+git clone git@github.com:cablelabs/micronets-infrastructure.git
+cd micronets-infrastructure
+mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-websocket-proxy
 ```
 
 #### 2.4.2 Connecting the websocket test client to the proxy (using the same URI as a connected micronets gateway)
