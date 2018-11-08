@@ -43,9 +43,10 @@ cat lib/micronets-api-client.cert.pem lib/micronets-api-client.key.pem > lib/mic
 The `lib/micronets-api-client.pkeycert.pem` file must be deployed with any
 micronet software component that needs to access a cert-controlleed micronets API.
 
-# Micronets Websocket Proxy Readme
+## 2. The websocket proxy
 
-## 2. Setting up the websocket proxy
+The websocket proxy allows 2 websocket clients to connect to each other using
+outbound connections to a common URI.
 
 ### 2.1 Setting up proxy authorization using certificates
 
