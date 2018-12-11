@@ -74,7 +74,20 @@ preferred method (see below).
 
 #### 1.1.4 Running the websocket proxy using systemd
 
-The systemctl service can be installed for the systemd service using:
+An example systemd service control file `micronets-ws-proxy.service` is provided in the source 
+distribution. The "WorkingDirectory" and "ExecStart" entries need to be modified to match the
+location of the websocket proxy virtualenv and python program. And the "User" and "Group" settings
+should be set to the micronets user (or commended out to run as "root") E.g.
+
+```
+WorkingDirectory=/home/micronets-dev/Projects/micronets/micronets-infrastructure
+ExecStart=/home/micronets-dev/Projects/micronets/micronets-infrastructure/virtualenv/bin/python bin/websocket-proxy.py
+User=micronets-dev
+Group=micronets-dev
+```
+
+
+The systemctl service unit file can be installed for the systemd service using:
 
 ```
 sudo systemctl enable $PWD/micronets-ws-proxy.service
@@ -189,7 +202,6 @@ bin/gen-leaf-cert --cert-basename lib/micronets-ws-test-client \
 
 cat lib/micronets-ws-test-client.cert.pem lib/micronets-ws-test-client.key.pem > lib/micronets-ws-test-client.pkeycert.pem
 ```
-
 
 ### 2.2 Testing the micronets websocket proxy
 
