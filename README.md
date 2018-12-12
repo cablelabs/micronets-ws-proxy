@@ -54,8 +54,14 @@ pip install -r requirements.txt
 
 #### 1.1.3 Running the websocket proxy manually
 
-From the python-infrastructure directory, run:
+From the python-infrastructure directory, perform the following steps:
 
+Setup the virtualenv:
+```
+bin/setup-virtualenv.sh
+```
+
+Start the proxy:
 ```
 virtualenv/bin/python bin/websocket-proxy.py
 ```
@@ -74,10 +80,17 @@ preferred method (see below).
 
 #### 1.1.4 Running the websocket proxy using systemd
 
+From the python-infrastructure directory, perform the following steps to setup the virtualenv:
+
+Setup the virtualenv:
+```
+bin/setup-virtualenv.sh
+```
+
 An example systemd service control file `micronets-ws-proxy.service` is provided in the source 
 distribution. The "WorkingDirectory" and "ExecStart" entries need to be modified to match the
 location of the websocket proxy virtualenv and python program. And the "User" and "Group" settings
-should be set to the micronets user (or commended out to run as "root") E.g.
+should be set to the "micronets" user (or commented out to run as "root") E.g.
 
 ```
 WorkingDirectory=/home/micronets-dev/Projects/micronets/micronets-infrastructure
@@ -85,7 +98,6 @@ ExecStart=/home/micronets-dev/Projects/micronets/micronets-infrastructure/virtua
 User=micronets-dev
 Group=micronets-dev
 ```
-
 
 The systemctl service unit file can be installed for the systemd service using:
 
@@ -159,7 +171,7 @@ Micronets websocket proxy and well-protected. The `lib/micronets-ws-root.cert.pe
 must be added to the Proxy's list of trusted CAs. (and should really be the only
 CA enabled for the proxy)
 
-#### 2.1.3 Generating the cert to be used for the Micronets Manager:
+#### 1.2.3 Generating the cert to be used for the Micronets Manager:
 
 ```
 bin/gen-leaf-cert --cert-basename lib/micronets-manager \
@@ -175,7 +187,7 @@ The `lib/micronets-manager.pkeycert.pem` file must be deployed with the
 Micronets Manager to connect to the websocket proxy and `lib/micronets-ws-root.cert.pem` 
 must be added to the Micronet's Manager CA list.
 
-#### 2.1.4 To generate the cert to be used for the Micronets Gateway Service:
+#### 1.2.4 To generate the cert to be used for the Micronets Gateway Service:
 
 ```
 bin/gen-leaf-cert --cert-basename lib/micronets-gateway-service \
@@ -191,7 +203,7 @@ The `lib/micronets-manager.pkeycert.pem` file must be deployed with the
 Micronets Manager to connect to the websocket proxy and `lib/micronets-ws-root.cert.pem` 
 must be added to the Micronet's Manager CA list.
 
-#### 2.1.5 To generate the cert to be used by the test client:
+#### 1.2.5 To generate the cert to be used by the test client:
 
 ```
 bin/gen-leaf-cert --cert-basename lib/micronets-ws-test-client \
@@ -203,9 +215,9 @@ bin/gen-leaf-cert --cert-basename lib/micronets-ws-test-client \
 cat lib/micronets-ws-test-client.cert.pem lib/micronets-ws-test-client.key.pem > lib/micronets-ws-test-client.pkeycert.pem
 ```
 
-### 2.2 Testing the micronets websocket proxy
+### 1.3 Testing the micronets websocket proxy
 
-#### 2.2.1 Downloading the micronets infrastructure source (containing the test client)
+#### 1.3.1 Downloading the micronets infrastructure source (containing the test client)
 
 ```
 mkdir -p ~/projects/micronets
@@ -215,7 +227,7 @@ cd micronets-infrastructure
 mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-websocket-proxy
 ```
 
-#### 2.2.2 Connecting the websocket test client to the proxy (using the same URI as a connected micronets gateway)
+#### 1.3.2 Connecting the websocket test client to the proxy (using the same URI as a connected micronets gateway)
 
 The websocket test client takes all its parameters via arguments. Use "-h" to see the options. A typical test session would look like this:
 
@@ -244,7 +256,7 @@ ws-test-client: receive: starting...
 MyHTTPServerThread: Starting HTTP server on localhost port 5001...
 ```
 
-#### 2.2.3 Using the websocket test client's built-in HTTP proxy to test the websocket
+#### 1.3.3 Using the websocket test client's built-in HTTP proxy to test the websocket
 
 To use the websocket-test-client’s built-in server to test the proxying of an HTTP REST request and response to the Micronet’s DHCP server running on the gateway, requests can be sent to the port specified using the "--http-proxy-port" argument (or port "5001" if not specified).
 
@@ -258,10 +270,96 @@ When sending a request via the built-in http test server, the websocket-test-cli
 
 See below for details on the micronets websocket proxy message format.
 
+## 2. The MUD Manager
 
-## 3. API Keys
+### 2.1 Quick Start
 
-### 3.1 Generating the shared root certificate used for micronet API component communication:
+#### 2.1.1 Running the MUD Manager manually
+
+From the python-infrastructure directory, perform the following steps:
+
+Setup the virtualenv:
+```
+bin/setup-virtualenv-mudmanager.sh
+```
+
+Start the MUD manger:
+```
+micronets-mud-manager.virtualenv/bin/python bin/mudWS.py
+```
+(or if you plan to run the MUD Manager repeatedly, for debug/development)
+```
+source micronets-mud-manager.virtualenv/bin/activate
+python bin/mudWS.py
+```
+
+You should see output similar to the following:
+```
+12/Dec/2018:22:53:57] ENGINE Bus STARTING
+CherryPy Checker:
+The Application mounted at '' has an empty config.
+
+[12/Dec/2018:22:53:57] ENGINE Started monitor thread 'Autoreloader'.
+[12/Dec/2018:22:53:57] ENGINE Serving on http://0.0.0.0:8888
+[12/Dec/2018:22:53:57] ENGINE Bus STARTED
+```
+
+The MUD Manager can be stopped via Control-C. But it will also be stopped if/when the terminal session 
+the proxy is started from terminates. It can also be run via "nohup". But running it via systemd is the
+preferred method (see below).
+
+#### 2.1.2 Running the MUD Manager using systemd
+
+From the python-infrastructure directory, perform the following steps to setup the virtualenv:
+
+Setup the virtualenv:
+```
+bin/setup-virtualenv-mudmanager.sh
+```
+
+An example systemd service control file `micronets-mud-manager.service` is provided in the source 
+distribution. The "WorkingDirectory" and "ExecStart" entries need to be modified to match the
+location of the MUD Manager virtualenv and python program. And the "User" and "Group" settings
+should be set to the "micronets" user (or commented out to run as "root") E.g.
+
+```
+WorkingDirectory=/home/micronets-dev/Projects/micronets/micronets-infrastructure
+ExecStart=/home/micronets-dev/Projects/micronets/micronets-infrastructure/virtualenv/bin/python bin/websocket-proxy.py
+User=micronets-dev
+Group=micronets-dev
+```
+
+The systemctl service unit file can be installed for the systemd service using:
+
+```
+sudo systemctl enable $PWD/micronets-mud-manager.service
+sudo systemctl daemon-reload
+```
+
+Once the micronets-mud-manager service is installed, it can be run using:
+
+```
+sudo systemctl start micronets-mud-manager.service
+```
+
+Where the logging will be stored is system-dependent. On Ubuntu 16.04 systems
+logging will be written to `/var/log/syslog`.
+
+The status of the proxy can be checked using:
+
+```
+sudo systemctl status micronets-mud-manager.service
+```
+
+and the proxy stopped using:
+
+```
+sudo systemctl stop micronets-mud-manager.service
+```
+
+## 3. API Client Certs
+
+### 3.1 Generating the shared root certificate used for micronets API component communication:
 
 This will produce the root certificate and key for validating/generating
 leaf certificates used by certain micronets API:

@@ -1,0 +1,24 @@
+# To install and run this .service file:
+#   sudo systemctl enable $PWD/micronets-mud-manager.service
+#   sudo systemctl daemon-reload 
+#   sudo systemctl start micronets-mud-manager.service
+
+[Unit]
+Description=Micronets MUD Manager
+After=network-online.target
+
+[Service]
+Type=idle
+# Note: These need to be modified to reflect the system location
+WorkingDirectory=/home/micronets-dev/projects/micronets/micronets-infrastructure 
+ExecStart=/home/micronets-dev/projects/micronets/micronets-infrastructure/micronets-mud-manager.virtualenv/bin/python bin/mudWS.py
+User=micronets-dev
+Group=micronets-dev
+StandardOutput=syslog
+StandardError=syslog
+# SyslogFacility=none
+SyslogIdentifier=micronets-mud-manager
+SyslogLevel=debug
+
+[Install]
+WantedBy=multi-user.target
