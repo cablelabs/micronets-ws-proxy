@@ -1,7 +1,6 @@
 import cherrypy
 import requests
 import json
-from cherrypy.process.plugins import Daemonizer
 import mudParser
 
 
@@ -49,9 +48,6 @@ class MudManagerWS(object):
         return ""
 
 if __name__ == '__main__':
-
-    d = Daemonizer(cherrypy.engine)
-    d.subscribe()
 
     config = {'server.socket_host': '0.0.0.0',
              'server.socket_port': 8888,
