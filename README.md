@@ -110,6 +110,30 @@ and the proxy stopped using:
 sudo systemctl stop micronets-ws-proxy
 ```
 
+### 1.5 Running the websocket proxy using Docker
+
+#### 1.5.1 To build the Docker image:
+
+```
+docker build --tag=micronets-ws-proxy .
+```
+
+#### 1.5.2 To start a container locally and run it in the background:
+
+On Linux:
+```
+docker run -d --network host micronets-ws-proxy 
+```
+
+On MacOS:
+```
+docker run -d -p 5050:5050 micronets-ws-proxy
+```
+
+#### 1.5.3 Deploying a docker image to Artifactory
+
+TBD
+
 ## 2 Setting up proxy authorization using certificates
 
 This repository contains pre-generated certificates for testing/prototyping. 
