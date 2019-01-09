@@ -5,15 +5,15 @@ outbound connections to a common URI.
 
 ## 1 Quick Start
 
-### 1.1 Checkout out the Micronets infrastructure project
+### 1.1 Checkout out the Micronets websocket proxy project
 
 From a directory containing your micronets repositories (e.g. "~/projects/micronets")
 
 ```
-git clone git@github.com:cablelabs/micronets-infrastructure.git
+git clone git@github.com:cablelabs/micronets-ws-proxy.git
 ```
 
-This will create a "micronets-infrastructure" containing the websocket proxy.
+This will create a "micronets-ws-proxy" directory containing the websocket proxy.
 
 ### 1.2 Setting the proxy parameters
 
@@ -40,7 +40,7 @@ All other dependancies are installed into the virtualenv for the websocket proxy
 
 The python virtualenv with the library dependancies is setup by performing the following steps:
 
-From the python-infrastructure directory:
+From the micronets-ws-proxy directory:
 
 ```
 virtualenv --clear -p $(which python3.6) $PWD/virtualenv
@@ -76,8 +76,8 @@ location of the websocket proxy virtualenv and python program. And the "User" an
 should be set to the micronets user (or commended out to run as "root") E.g.
 
 ```
-WorkingDirectory=/home/micronets-dev/Projects/micronets/micronets-infrastructure
-ExecStart=/home/micronets-dev/Projects/micronets/micronets-infrastructure/virtualenv/bin/python bin/websocket-proxy.py
+WorkingDirectory=/home/micronets-dev/Projects/micronets/micronets-ws-proxy
+ExecStart=/home/micronets-dev/Projects/micronets/micronets-ws-proxy/virtualenv/bin/python bin/websocket-proxy.py
 User=micronets-dev
 Group=micronets-dev
 ```
@@ -200,13 +200,13 @@ cat lib/micronets-ws-test-client.cert.pem lib/micronets-ws-test-client.key.pem >
 
 ## 3 Testing the micronets websocket proxy
 
-### 3.1 Downloading the micronets infrastructure source (containing the test client)
+### 3.1 Downloading the micronets websocket proxy source (containing the test client)
 
 ```
 mkdir -p ~/projects/micronets
 cd ~/projects/micronets
-git clone git@github.com:cablelabs/micronets-infrastructure.git
-cd micronets-infrastructure
+git clone git@github.com:cablelabs/micronets-ws-proxy.git
+cd micronets-ws-proxy
 mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-websocket-proxy
 ```
 
