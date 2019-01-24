@@ -130,9 +130,27 @@ On MacOS:
 docker run -d -p 5050:5050 micronets-ws-proxy
 ```
 
-#### 1.6.3 Deploying a docker image to Artifactory
+#### 1.6.3 Deploying a Docker image to Artifactory
 
-TBD
+A `Makefile` is provided to generate the Docker image and upload it to the configured artifact repository. 
+
+Both can be accomplished by running:
+
+```make docker-push```
+
+Note that the destination repository and path is configured in the `Makefile` and that Docker will request 
+credentials in order to perform the push.
+
+#### 1.6.4 Retrieving the latest docker image from Artifactory
+
+The commands to retrieve the latest Docker image(s) for the websocket proxy are also contained in the included Makefile. 
+
+To pull the latest Docker(s) run:
+
+```make docker-pull```
+
+Note that the source repository and path is configured in the `Makefile`. 
+No credential should be required to pull the Docker image.
 
 ## 2 Setting up proxy authorization using certificates
 
