@@ -3,6 +3,7 @@
 # WS client example
 
 import sys
+import time
 import argparse
 import asyncio
 import threading
@@ -11,7 +12,6 @@ import traceback
 import pathlib
 import ssl
 import json
-from quart import json as quart_json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from websockets import ConnectionClosed
 
@@ -70,18 +70,22 @@ async def send_rest_message (websocket, message):
     print ("ws-test-client: > sending REST message: ", message)
     await websocket.send (message)
 
+def check_message (message):
+    message_body = check_json_field (message, 'message', dict, True)
+    message_id = check_json_field (message_body, 'messageId', int, True)
+    message_type = check_json_field (message_body, 'messageType', str, True)
+    check_json_field (message_body, 'requiresResponse', bool, True)
+
 async def wait_for_hello_message (websocket):
     raw_message = await websocket.recv ()
     message = json.loads (raw_message)
     print (f"ws-test-client: process_hello_messages: Received message: {message}")
-    if (not message):
+    if not message:
         raise Exception (f"message does not appear to be json")
-    hello_message = check_json_field (message, 'message', dict, True)
-    message_id = check_json_field (hello_message, 'messageId', int, True)
-    message_type = check_json_field (hello_message, 'messageType', str, True)
-    check_json_field (hello_message, 'requiresResponse', bool, True)
+    check_message (message)
 
-    if (message_type != "CONN:HELLO"):
+    message_type = message['message']['messageType']
+    if message_type != "CONN:HELLO":
         raise Exception (f"Unexpected message while waiting for HELLO: {message_type}")
 
     print (f"ws-test-client: process_hello_messages: Received HELLO message")
@@ -261,6 +265,33 @@ class MyHTTPServerThread (threading.Thread):
         finally:
             self.lock.release ()
 
+class ConsoleThread (threading.Thread):
+    def __init__ (self):
+        print ("ConsoleThread.__init__()")
+        threading.Thread.__init__ (self)
+
+    def run (self):
+        time.sleep(1)
+        print("ConsoleThread.run())")
+        while (True):
+            try:
+                print ("Enter json message to send via websocket or \"quit\": ")
+                # https://docs.python.org/3.6/library/json.html#module-json
+                line = sys.stdin.readline()
+                if line.startswith("quit"):
+                    stop_everything()
+                message = json.loads(line)
+                check_message(message)
+                print (f"sending message: {json.dumps(message, indent=4)}")
+                ws = get_websocket()
+                request_future = asyncio.run_coroutine_threadsafe(ws.send(line), event_loop)
+                request_future.result()
+            except Exception as ex:
+                print(f"ConsoleThread: Caught exception: {ex}")
+
+    def shutdown (self):
+        print("ConsoleThread.shutdown()")
+
 print ("Startup...")
 
 message_id = 0
@@ -285,6 +316,8 @@ try:
                                                                                        args.connect_uri)))
     my_http_thread = MyHTTPServerThread ()
     my_http_thread.start ()
+    console_thread = ConsoleThread ()
+    console_thread.start ()
     print (f"ws-test-client: Starting event loop...")
     event_loop.run_until_complete (receive (websocket))
 except ConnectionClosed or IncompleteReadError as ex:

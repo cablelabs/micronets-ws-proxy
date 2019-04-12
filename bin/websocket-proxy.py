@@ -180,6 +180,7 @@ async def ws_connected (websocket, path):
     try:
         new_client = None
         peer_client = None
+        client_list = None
         remote_address = websocket.remote_address
         logger.info (f"ws_connected: from {remote_address}, {path}")
         if (not path.startswith (proxy_service_prefix)):
