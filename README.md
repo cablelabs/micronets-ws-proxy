@@ -249,7 +249,7 @@ mkdir -p ~/projects/micronets
 cd ~/projects/micronets
 git clone git@github.com:cablelabs/micronets-ws-proxy.git
 cd micronets-ws-proxy
-mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-websocket-proxy
+mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-ws-proxy
 ```
 
 ### 3.2 Connecting the websocket test client to the proxy (using the same URI as a connected micronets gateway)
@@ -257,22 +257,27 @@ mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-websocket
 The websocket test client takes all its parameters via arguments. Use "-h" to see the options. A typical test session would look like this:
 
 ```
-workon micronets-websocket-proxy
-bin/websocket-test-client.py --client-cert lib/micronets-manager.pkeycert.pem --ca-cert lib/micronets-ws-root.cert.pem  wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001
+workon micronets-ws-proxy
+bin/websocket-test-client.py --client-cert lib/micronets-manager.pkeycert.pem --ca-cert lib/micronets-ws-root.cert.pem  wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/test/gateway-0001
 ```
 
 The test client should startup with log messages similar to:
 
 ```
+Startup...
 Loading test client certificate from lib/micronets-manager.pkeycert.pem
 Loading CA certificate from lib/micronets-ws-root.cert.pem
-ws-test-client: Starting stdin reader...
-ws-test-client: Opening websocket to wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001...
-ws-test-client: Connected to wss://74.207.229.106:5050/micronets/v1/ws-proxy/micronets-dhcp-0001.
+ws-test-client: Opening websocket to wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/test/gateway-0001...
+ws-test-client: Connected to wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/test/gateway-0001.
 ws-test-client: Sending HELLO message...
 ws-test-client: > sending hello message:  {"message": {"messageId": 0, "messageType": "CONN:HELLO", "requiresResponse": false, "peerClass": "micronets-ws-test-client", "peerId": "12345678"}}
 ws-test-client: Waiting for HELLO message...
-ws-test-client: process_hello_messages: Received message: {'message': {'messageId': 0, 'messageType': 'CONN:HELLO', 'peerClass': 'micronets-dhcp-service', 'peerId': '12345678', 'requiresResponse': False}}
+```
+
+and when a peer is connected to the proxy:
+
+```
+ws-test-client: process_hello_messages: Received message: {'message': {'messageId': 0, 'messageType': 'CONN:HELLO', 'peerClass': 'micronets-ws-test-client', 'peerId': '12345678', 'requiresResponse': False}}
 ws-test-client: process_hello_messages: Received HELLO message
 ws-test-client: HELLO handshake complete.
 MyHTTPServerThread.__init__(): state: ready
