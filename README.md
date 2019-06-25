@@ -122,7 +122,7 @@ docker build --tag=micronets-ws-proxy .
 
 On Linux:
 ```
-docker run -d --network host micronets-ws-proxy 
+docker run -d --network host --restart unless-stopped --name micronets-ws-proxy-service micronets-ws-proxy 
 ```
 
 On MacOS:
