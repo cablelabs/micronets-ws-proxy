@@ -310,9 +310,10 @@ ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
 event_loop = asyncio.get_event_loop ()
+my_http_thread = None
+console_thread = None
 try:
-    my_http_thread = None
-    websocket = event_loop.run_until_complete (asyncio.ensure_future (init_connection (ssl_context, 
+    websocket = event_loop.run_until_complete (asyncio.ensure_future (init_connection (ssl_context,
                                                                                        args.connect_uri)))
     my_http_thread = MyHTTPServerThread ()
     my_http_thread.start ()
@@ -329,3 +330,5 @@ finally:
     event_loop.close ()
     if (my_http_thread):
         my_http_thread.shutdown ()
+    if (console_thread):
+        console_thread.shutdown ()
