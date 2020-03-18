@@ -17,21 +17,45 @@ This will create a "micronets-ws-proxy" directory containing the websocket proxy
 
 ### 1.2 Setting the proxy parameters
 
-For now, the websocket proxy's parameters are stored in the bin/websocket-test-client.py source.
-If you're running the proxy on your local machine (for testing), you don't need to change the
-defaults - which should be something like this:
+The websocket proxy takes the following parameters:
 
 ```
-proxy_bind_address = "localhost"
-proxy_port = 5050
-proxy_service_prefix = "/micronets/v1/ws-proxy/"
-proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
-root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
-```
+usage: websocket-proxy.py [-h] [--ca-certs CA_CERTS] [--ca-path CA_PATH]
+                          --server-cert SERVER_CERT
+                          [--bind-address BIND_ADDRESS]
+                          [--bind-port BIND_PORT]
+                          [--url-path-prefix URL_PATH_PREFIX]
+                          [--report-interval REPORT_INTERVAL]
 
-If you have a test server to run the proxy on, most likely the only param you would want
-to change is the `proxy_bind_address` - which you can set to `0.0.0.0` to listen on all
-interfaces, or set to the IP address of the interface you want to expose the proxy on.
+The micronets websocket proxy service
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --ca-certs CA_CERTS, -cac CA_CERTS
+                        add the given CA cert to the list of trusted root
+                        certs (or MICRONETS_WSPROXY_CA_CERT) (default: None)
+  --ca-path CA_PATH, -cap CA_PATH
+                        add the given CA cert to the list of trusted root
+                        certs (or MICRONETS_WSPROXY_CA_PATH) (default: None)
+  --server-cert SERVER_CERT, -sc SERVER_CERT
+                        use the given cert and private key file for the WSS
+                        server (or MICRONETS_WSPROXY_SERVER_CERT) (default:
+                        None)
+  --bind-address BIND_ADDRESS, -a BIND_ADDRESS
+                        specify the address to bind the MUD manager to (or
+                        MICRONETS_WSPROXY_BIND_ADDRESS) (default: 0.0.0.0)
+  --bind-port BIND_PORT, -p BIND_PORT
+                        specify the port to bind the MUD manager to (or
+                        MICRONETS_WSPROXY_BIND_PORT) (default: 5050)
+  --url-path-prefix URL_PATH_PREFIX, -sp URL_PATH_PREFIX
+                        the URL prefix required for any clients to connect (or
+                        MICRONETS_WSPROXY_URL_PATH_PREFIX) (default:
+                        /micronets/v1/ws-proxy/)
+  --report-interval REPORT_INTERVAL, -ri REPORT_INTERVAL
+                        the amount of time to wait between generating reports
+                        (or MICRONETS_WSPROXY_PATH_PREFIX) (0: disabled)
+                        (default: 0)
+```
 
 ### 1.3 Setting up the websocket proxy environment
 
@@ -50,18 +74,25 @@ pip install -r requirements.txt
 
 ### 1.4 Running the websocket proxy manually
 
-From the python-infrastructure directory, run:
+From the micronets-ws-proxy directory, for example, run:
 
 ```
-virtualenv/bin/python bin/websocket-proxy.py
+python bin/websocket-proxy.py --server-cert lib/micronets-ws-proxy.pkeycert.pem --ca-certs lib/micronets-ws-root.cert.pem
 ```
 
 You should see output similar to the following:
 
 ```
-2018-12-10 12:56:07,310 micronets-ws-proxy: INFO Loading proxy certificate from lib/micronets-ws-proxy.pkeycert.pem
-2018-12-10 12:56:07,312 micronets-ws-proxy: INFO Loading CA certificate from lib/micronets-ws-root.cert.pem
-2018-12-10 12:56:07,313 micronets-ws-proxy: INFO Starting micronets websocket proxy on 0.0.0.0 port 5050...
+micronets-ws-proxy: INFO Bind address: 0.0.0.0
+micronets-ws-proxy: INFO Bind port: 5050
+micronets-ws-proxy: INFO Server cert/key: lib/micronets-ws-proxy.pkeycert.pem
+micronets-ws-proxy: INFO CA path: None
+micronets-ws-proxy: INFO Additional CA certs: lib/micronets-ws-root.cert.pem
+micronets-ws-proxy: INFO URL Path Prefix: /micronets/v1/ws-proxy/
+micronets-ws-proxy: INFO Report Interval: 0
+micronets-ws-proxy: INFO Loading proxy certificate/key from lib/micronets-ws-proxy.pkeycert.pem
+micronets-ws-proxy: INFO Starting micronets websocket proxy on 0.0.0.0 port 5050...
+micronets-ws-proxy: INFO Clients may connect to wss://0.0.0.0:5050/micronets/v1/ws-proxy/*
 ```
 
 The websocket proxy can be stopped via Control-C. But it will also be stopped if/when the terminal session 

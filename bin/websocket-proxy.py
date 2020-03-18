@@ -7,24 +7,54 @@ import asyncio
 import websockets
 import pathlib
 import ssl
+import argparse
+import os
 
 from quart import json
+
+logging.basicConfig (level='INFO',format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+logger = logging.getLogger ('micronets-ws-proxy')
 
 bin_path = pathlib.Path (__file__).parent
 
 # Change these if/when necessary (TODO: integrate argparse support)
 
-proxy_bind_address = "0.0.0.0" # Use "localhost" when testing...
-proxy_port = 5050
-proxy_service_prefix = "/micronets/v1/ws-proxy/"
-proxy_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-proxy.pkeycert.pem')
-root_cert_path = bin_path.parent.joinpath ('lib/micronets-ws-root.cert.pem')
-report_interval_s = 0 # seconds, 0 to disable
+arg_parser = argparse.ArgumentParser(description='The micronets websocket proxy service',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+arg_parser.add_argument ('--ca-certs', "-cac", required=False, action='store', type=open,
+                         default = os.environ.get('MICRONETS_WSPROXY_CA_CERT'),
+                         help="add the given CA cert to the list of trusted root certs (or MICRONETS_WSPROXY_CA_CERT)")
+arg_parser.add_argument ('--ca-path', "-cap", required=False, action='store', type=str,
+                         default = os.environ.get('MICRONETS_WSPROXY_CA_PATH'),
+                         help="add the given CA cert to the list of trusted root certs (or MICRONETS_WSPROXY_CA_PATH)")
+arg_parser.add_argument ('--server-cert', "-sc", required=True, action='store', type=str,
+                         default = os.environ.get('MICRONETS_WSPROXY_SERVER_CERT'),
+                         help="use the given cert and private key file for the WSS server (or MICRONETS_WSPROXY_SERVER_CERT)")
+arg_parser.add_argument ('--bind-address', "-a", required=False, action='store', type=str,
+                         default=os.environ.get('MICRONETS_WSPROXY_BIND_ADDRESS') or "0.0.0.0",
+                         help="specify the address to bind the MUD manager to (or MICRONETS_WSPROXY_BIND_ADDRESS)")
+arg_parser.add_argument ('--bind-port', "-p", required=False, action='store', type=int,
+                         default = os.environ.get('MICRONETS_WSPROXY_BIND_PORT') or 5050,
+                         help="specify the port to bind the MUD manager to (or MICRONETS_WSPROXY_BIND_PORT)")
+arg_parser.add_argument ('--url-path-prefix', "-sp", required=False, action='store', type=str,
+                         default = os.environ.get('MICRONETS_WSPROXY_URL_PATH_PREFIX') or "/micronets/v1/ws-proxy/",
+                         help="the URL prefix required for any clients to connect (or MICRONETS_WSPROXY_URL_PATH_PREFIX)")
+arg_parser.add_argument ('--report-interval', "-ri", required=False, action='store', type=int,
+                         default = os.environ.get('MICRONETS_WSPROXY_REPORT_INTERVAL') or 0,
+                         help="the amount of time to wait between generating reports (or MICRONETS_WSPROXY_PATH_PREFIX)"
+                              " (0: disabled)")
+args = arg_parser.parse_args ()
+
+logger.info(f"Bind address: {args.bind_address}")
+logger.info(f"Bind port: {args.bind_port}")
+logger.info(f"Server cert/key: {args.server_cert}")
+logger.info(f"CA path: {args.ca_path}")
+logger.info(f"Additional CA certs: {args.ca_certs.name if args.ca_certs else None}")
+logger.info(f"URL Path Prefix: {args.url_path_prefix}")
+logger.info(f"Report Interval: {args.report_interval}")
 
 meetup_table = {}
-
-logging.basicConfig (level='INFO',format='%(asctime)s %(name)s: %(levelname)s %(message)s')
-logger = logging.getLogger ('micronets-ws-proxy')
 
 
 class WSClient:
@@ -183,10 +213,10 @@ async def ws_connected (websocket, path):
         client_list = None
         remote_address = websocket.remote_address
         logger.info (f"ws_connected: from {remote_address}, {path}")
-        if (not path.startswith (proxy_service_prefix)):
-            logger.warning (f"ws_connected: Unsupported path: {proxy_service_prefix} - CLOSING!")
+        if (not path.startswith (args.url_path_prefix)):
+            logger.warning (f"ws_connected: Error: {path} doesn't start with {args.url_path_prefix} - CLOSING!")
             return
-        meetup_id = path [len (proxy_service_prefix):]
+        meetup_id = path [len (args.url_path_prefix):]
         if (not meetup_id in meetup_table):
             client_list = []
             meetup_table [meetup_id] = client_list
@@ -260,7 +290,7 @@ def start_websocket_reporting (report_interval_s):
 def perform_connection_report ():
         report = f"\n---------------------------------------------------------------------------------------\n"
         report += "WEBSOCKET MEETUP TABLE REPORT FOR {}:{}/{}\n"\
-                  .format (proxy_bind_address, proxy_port, proxy_service_prefix)
+                  .format (args.bind_address, args.bind_port, args.url_path_prefix)
         for meetup_id, meetup_list in meetup_table.items():
             report += "\n  MEETUP ID: {}\n".format (meetup_id)
             if len(meetup_list) > 0:
@@ -285,20 +315,21 @@ async def perform_periodic_connection_reports (report_interval_s):
 ssl_context = ssl.SSLContext (ssl.PROTOCOL_TLS_SERVER)
 
 # Setup the proxy's cert
-logger.info ("Loading proxy certificate from %s", proxy_cert_path)
-ssl_context.load_cert_chain (proxy_cert_path)
+logger.info ("Loading proxy certificate/key from %s", args.server_cert)
+ssl_context.load_cert_chain(args.server_cert)
 
 # Enable client cert verification
-logger.info ("Loading CA certificate from %s", root_cert_path)
-ssl_context.load_verify_locations (cafile = root_cert_path)
+ssl_context.load_verify_locations (cafile = args.ca_certs.name if args.ca_certs else None, capath=args.ca_path)
+
 ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 ssl_context.check_hostname = False
 
-websocket = websockets.serve (ws_connected, proxy_bind_address, proxy_port, ssl=ssl_context)
+websocket = websockets.serve (ws_connected, args.bind_address, args.bind_port, ssl=ssl_context)
 
-if report_interval_s > 0:
-    start_websocket_reporting (report_interval_s)
+if args.report_interval > 0:
+    start_websocket_reporting (args.report_interval)
 
-logger.info (f"Starting micronets websocket proxy on {proxy_bind_address} port {proxy_port}...")
+logger.info (f"Starting micronets websocket proxy on {args.bind_address} port {args.bind_port}...")
+logger.info (f"Clients may connect to wss://{args.bind_address}:{args.bind_port}{args.url_path_prefix}*")
 asyncio.get_event_loop ().run_until_complete (websocket)
 asyncio.get_event_loop ().run_forever ()
