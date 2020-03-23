@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 shortname="${0##*/}"
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -9,7 +10,7 @@ DOCKER_CMD="docker"
 # https://community.cablelabs.com/mvn/micronets-docker/micronets-ws-proxy
 DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy:latest"
 DEF_CONTAINER_NAME=micronets-ws-proxy-service
-DEF_LIB_PATH=/etc/micronets/micronets-ws-proxy/lib
+DEF_LIB_PATH=/etc/micronets/micronets-ws-proxy.d/lib
 DEF_BIND_PORT=5050
 DEF_BIND_ADDRESS=0.0.0.0
 
@@ -112,21 +113,36 @@ function docker-pull()
 function docker-run()
 {
     echo "Starting container \"$container_name\" from $docker_image_id (on $bind_address:$bind_port)"
-    docker-rm
     $DOCKER_CMD run --read-only -d --restart unless-stopped \
         --name $container_name \
         -v $lib_bind_path:/app/lib/ \
         -p $bind_address:$bind_port:$bind_port \
-        $docker_image_id --bind-port $bind_port \
+        $docker_image_id python3.6 websocket-proxy.py \
+                         --bind-port $bind_port \
                          --server-cert /app/lib/micronets-ws-proxy.pkeycert.pem \
                          --ca-certs /app/lib/micronets-ws-root.cert.pem
-    # Note that the
+}
+
+function docker-run-shell()
+{
+    echo "Starting shell for container \"$container_name\" from $docker_image_id (on $bind_address:$bind_port)"
+    $DOCKER_CMD run --read-only \
+        --name $container_name \
+        -v $lib_bind_path:/app/lib/ \
+        -p $bind_address:$bind_port:$bind_port \
+        -it $docker_image_id /bin/bash
 }
 
 function docker-rm()
 {
     echo "Attempting to remove container \"$container_name\""
     $DOCKER_CMD container rm $container_name
+}
+
+function docker-kill()
+{
+    echo "Attempting to remove container \"$container_name\""
+    $DOCKER_CMD container kill $container_name
 }
 
 #
