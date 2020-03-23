@@ -26,8 +26,8 @@ function print_usage()
     echo "          [--expiration-in-days <expiration-in-days>]"
     echo "          [--force-overwrite]"
     echo ""
-    echo "       ${shortname} generates an OCF-compliant certificate used to sign"
-    echo "       either intermediate signing certificates or OCF leaf certificates."
+    echo "       ${shortname} generates an intermediate certificate used to sign"
+    echo "       either intermediate signing certificates or leaf certificates."
     echo "       The default base filename for the intermediate certificate and key file"
     echo "       will be ${cert_basename}."
 }
@@ -38,7 +38,7 @@ function process_arguments()
 
     ca_cert_file=""
     ca_key_file=""
-    cert_basename="ocf_intermediate_ca"
+    cert_basename="intermediate_ca"
     subject_org_name="${cert_basename}-IntermediateCA"
     expiration_in_days=500
     let force_overwrite=0
@@ -177,7 +177,7 @@ rm -f "${cert_ext_file}" "${cert_csr_file}"
 openssl x509 -in "${cert_file}" -out "${cert_der_file}" -outform der \
     || bailout "Error creating intermediate certificate DER file \"${cert_der_file}\""
 
-echo "Successfully generated OCF intermediate certificate \"${cert_file}\"/\"${cert_der_file}\""
+echo "Successfully generated intermediate certificate \"${cert_file}\"/\"${cert_der_file}\""
 echo ""
 
 openssl x509 -in "${cert_file}" -noout -text 

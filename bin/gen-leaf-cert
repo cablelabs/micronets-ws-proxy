@@ -26,8 +26,7 @@ function print_usage()
     echo "          [--expiration-in-days <expiration-in-days>]"
     echo "          [--force-overwrite]"
     echo ""
-    echo "       ${shortname} generates an OCF-compliant certificate used to identify"
-    echo "       OCF-compliant devices."
+    echo "       ${shortname} generates a leaf certificate"
     echo ""
     echo "       The default base filename for the intermediate certificate and key file"
     echo "       will be ${cert_basename}."
@@ -39,7 +38,7 @@ function process_arguments()
 
     ca_cert_file=""
     ca_key_file=""
-    cert_basename="ocf_dev"
+    cert_basename="leaf_cert"
     subject_org_name="${cert_basename}-Leaf"
     expiration_in_days=500
     let force_overwrite=0
@@ -177,7 +176,7 @@ rm -f "${cert_ext_file}" "${cert_csr_file}"
 openssl x509 -in "${cert_file}" -out "${cert_der_file}" -outform der \
     || bailout "Error creating leaf certificate DER file \"${cert_der_file}\""
 
-echo "Successfully generated OCF leaf certificate \"${cert_file}\"/\"${cert_der_file}\""
+echo "Successfully generated leaf certificate \"${cert_file}\"/\"${cert_der_file}\""
 echo ""
 
 openssl x509 -in "${cert_file}" -noout -text 

@@ -25,8 +25,8 @@ function print_usage()
     echo "          [--expiration-in-days <expiration-in-days>]"
     echo "          [--force-overwrite]"
     echo ""
-    echo "       ${shortname} generates an OCF-compliant certificate used to sign"
-    echo "       either intermediate signing certificates or OCF leaf certificates."
+    echo "       ${shortname} generates a root (self-signed) certificate used to sign"
+    echo "       either intermediate signing certificates or leaf certificates."
     echo "       The default base filename for the root certificate and key file"
     echo "       will be ${cert_basename}."
 }
@@ -35,7 +35,7 @@ function process_arguments()
 {
     shopt -s nullglob
 
-    cert_basename="ocf_root_ca"
+    cert_basename=root_ca"
     subject_org_name="${cert_basename}-RootCA"
     expiration_in_days=500
     let force_overwrite=0
@@ -146,7 +146,7 @@ rm -f "${cert_ext_file}" "${ca_csr_file}"
 openssl x509 -in "${ca_cert_file}" -out "${ca_cert_der_file}" -outform der \
     || bailout "Error creating root certificate DER file \"${ca_cert_der_file}\""
 
-echo "Successfully generated OCF root certificate \"${ca_cert_file}\"/\"${ca_cert_der_file}\""
+echo "Successfully generated root certificate \"${ca_cert_file}\"/\"${ca_cert_der_file}\""
 echo ""
 
 openssl x509 -in "${ca_cert_file}" -noout -text 
