@@ -1,7 +1,9 @@
 #!/bin/bash
 
 set -e
-set -x
+
+# Uncomment this on to debug the script
+# set -x
 
 shortname="${0##*/}"
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
