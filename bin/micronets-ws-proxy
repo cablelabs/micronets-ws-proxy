@@ -10,7 +10,8 @@ script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 DOCKER_CMD="docker"
 # https://community.cablelabs.com/mvn/micronets-docker/micronets-ws-proxy
-DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy:latest"
+DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy"
+DEF_IMAGE_TAG=latest
 DEF_CONTAINER_NAME=micronets-ws-proxy-service
 DEF_LIB_PATH=/etc/micronets/micronets-ws-proxy.d/lib
 DEF_BIND_PORT=5050
@@ -50,6 +51,8 @@ function print_usage()
     echo ""
     echo "   [--docker-image <docker image ID>"
     echo "       (default \"$DEF_IMAGE_LOCATION\")"
+    echo "   [--docker-image-tag <docker image tag>"
+    echo "       (default \"$DEF_IMAGE_TAG\")"
     echo "   [--docker-name <docker name to assign>"
     echo "       (default \"$DEF_CONTAINER_NAME\")"
     echo "   [--library-bind-path <lib directory to mount in container>"
@@ -67,6 +70,7 @@ function process_arguments()
 
     operation=""
     docker_image_id="$DEF_IMAGE_LOCATION"
+    docker_image_tag="$DEF_IMAGE_TAG"
     container_name=$DEF_CONTAINER_NAME
     lib_bind_path=$DEF_LIB_PATH
     bind_address=$DEF_BIND_ADDRESS
@@ -77,6 +81,10 @@ function process_arguments()
             shift
             docker_image_id="$1"
             shift || bailout_with_usage "missing parameter to --docker-image"
+        elif [ "$1" == "--docker-image-tag" ]; then
+            shift
+            docker_image_tag="$1"
+            shift || bailout_with_usage "missing parameter to --docker-image-tag"
         elif [ "$1" == "--docker-name" ]; then
             shift
             container_name="$1"
@@ -108,18 +116,18 @@ function process_arguments()
 
 function docker-pull()
 {
-    echo "Pulling docker image from $docker_image_id"
-	$DOCKER_CMD pull $docker_image_id
+    echo "Pulling docker image from $docker_image_id:$docker_image_tag"
+	$DOCKER_CMD pull $docker_image_id:$docker_image_tag
 }
 
 function docker-run()
 {
-    echo "Starting container \"$container_name\" from $docker_image_id (on $bind_address:$bind_port)"
+    echo "Starting container \"$container_name\" from $docker_image_id:$docker_image_tag (on $bind_address:$bind_port)"
     $DOCKER_CMD run --read-only -d --restart unless-stopped \
         --name $container_name \
         -v $lib_bind_path:/app/lib/ \
         -p $bind_address:$bind_port:$bind_port \
-        $docker_image_id python3.6 websocket-proxy.py \
+        $docker_image_id:$docker_image_tag python3.6 websocket-proxy.py \
                          --bind-port $bind_port \
                          --server-cert /app/lib/micronets-ws-proxy.pkeycert.pem \
                          --ca-certs /app/lib/micronets-ws-root.cert.pem
@@ -127,12 +135,12 @@ function docker-run()
 
 function docker-run-shell()
 {
-    echo "Starting shell for container \"$container_name\" from $docker_image_id (on $bind_address:$bind_port)"
+    echo "Starting shell for container \"$container_name\" from $docker_image_id:$docker_image_tag (on $bind_address:$bind_port)"
     $DOCKER_CMD run --read-only \
         --name $container_name \
         -v $lib_bind_path:/app/lib/ \
         -p $bind_address:$bind_port:$bind_port \
-        -it $docker_image_id /bin/bash
+        -it $docker_image_id:$docker_image_tag /bin/bash
 }
 
 function docker-rm()
@@ -143,8 +151,20 @@ function docker-rm()
 
 function docker-kill()
 {
-    echo "Attempting to remove container \"$container_name\""
+    echo "Attempting to kill container \"$container_name\""
     $DOCKER_CMD container kill $container_name
+}
+
+function docker-logs()
+{
+    echo "Showing logs for container \"$container_name\""
+    $DOCKER_CMD container logs --timestamps $container_name
+}
+
+function docker-trace()
+{
+    echo "Tracing logs for container \"$container_name\""
+    $DOCKER_CMD container logs --timestamps --follow --tail 50 $container_name
 }
 
 #
