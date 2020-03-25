@@ -35,7 +35,7 @@ function process_arguments()
 {
     shopt -s nullglob
 
-    cert_basename=root_ca"
+    cert_basename="root_ca"
     subject_org_name="${cert_basename}-RootCA"
     expiration_in_days=500
     let force_overwrite=0
