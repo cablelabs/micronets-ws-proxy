@@ -11,7 +11,7 @@ script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DOCKER_CMD="docker"
 # https://community.cablelabs.com/mvn/micronets-docker/micronets-ws-proxy
 DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy"
-DEF_IMAGE_TAG=latest
+DEF_IMAGE_TAG=nccoe-build-3
 DEF_CONTAINER_NAME=micronets-ws-proxy-service
 DEF_LIB_PATH=/etc/micronets/micronets-ws-proxy.d/lib
 DEF_BIND_PORT=5050
