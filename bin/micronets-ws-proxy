@@ -13,7 +13,7 @@ DOCKER_CMD="docker"
 DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy"
 DEF_IMAGE_TAG=nccoe-build-3
 DEF_CONTAINER_NAME=micronets-ws-proxy-service
-DEF_LIB_PATH=/etc/micronets/micronets-ws-proxy.d/lib
+DEF_CERTS_PATH=/etc/micronets/micronets-ws-proxy.d/lib
 DEF_BIND_PORT=5050
 DEF_BIND_ADDRESS=0.0.0.0
 
@@ -46,7 +46,7 @@ function print_usage()
     echo "     docker-restart: Restart the $shortname docker container"
     echo "     docker-logs: Show the logs for $shortname docker container"
     echo "     docker-trace: Watch the logs for the $shortname docker container"
-    echo "     docker-address|addr: Print the IP addresses for the $shortname docker container"
+    echo "     docker-address: Print the IP addresses for the $shortname docker container"
     echo "     docker-env: List the environment variables for the $shortname docker container"
     echo ""
     echo "   [--docker-image <docker image ID>"
@@ -55,8 +55,8 @@ function print_usage()
     echo "       (default \"$DEF_IMAGE_TAG\")"
     echo "   [--docker-name <docker name to assign>"
     echo "       (default \"$DEF_CONTAINER_NAME\")"
-    echo "   [--library-bind-path <lib directory to mount in container>"
-    echo "       (default \"$DEF_LIB_PATH\")"
+    echo "   [--certs-dir <directory containing authentication certs>"
+    echo "       (default \"$DEF_CERTS_DIR\")"
     echo "   [--bind-address <addresd to bind ${shortname} to>"
     echo "       (default \"$DEF_BIND_ADDRESS\")"
     echo "   [--bind-port <port to bind ${shortname} to>"
@@ -72,37 +72,38 @@ function process_arguments()
     docker_image_id="$DEF_IMAGE_LOCATION"
     docker_image_tag="$DEF_IMAGE_TAG"
     container_name=$DEF_CONTAINER_NAME
-    lib_bind_path=$DEF_LIB_PATH
+    certs_dir=$DEF_CERTS_DIR
     bind_address=$DEF_BIND_ADDRESS
     bind_port=$DEF_BIND_PORT
 
     while [[ $1 == --* ]]; do
-        if [ "$1" == "--docker-image" ]; then
+        opt_name=$1
+        if [ "$opt_name" == "--docker-image" ]; then
             shift
             docker_image_id="$1"
-            shift || bailout_with_usage "missing parameter to --docker-image"
-        elif [ "$1" == "--docker-image-tag" ]; then
+            shift || bailout_with_usage "missing parameter to $opt_name"
+        elif [ "$opt_name" == "--docker-image-tag" ]; then
             shift
             docker_image_tag="$1"
-            shift || bailout_with_usage "missing parameter to --docker-image-tag"
-        elif [ "$1" == "--docker-name" ]; then
+            shift || bailout_with_usage "missing parameter to $opt_name"
+        elif [ "$opt_name" == "--docker-name" ]; then
             shift
-            container_name="$1"
-            shift || bailout_with_usage "missing parameter to --docker-name"
-        elif [ "$1" == "--library-bind-path" ]; then
+            container_name="$opt_name"
+            shift || bailout_with_usage "missing parameter to $opt_name"
+        elif [ "$opt_name" == "--certs-dir" ]; then
             shift
-            lib_bind_path="$1"
-            shift || bailout_with_usage "missing parameter to --library-bind-path"
-        elif [ "$1" == "--bind-address" ]; then
+            certs_dir="$1"
+            shift || bailout_with_usage "missing parameter to $opt_name"
+        elif [ "$opt_name" == "--bind-address" ]; then
             shift
             bind_address="$1"
-            shift || bailout_with_usage "missing parameter to --bind-address"
-        elif [ "$1" == "--bind-port" ]; then
+            shift || bailout_with_usage "missing parameter to $opt_name"
+        elif [ "$opt_name" == "--bind-port" ]; then
             shift
             bind_port="$1"
-            shift || bailout_with_usage "missing parameter to --bind-port"
+            shift || bailout_with_usage "missing parameter to $opt_name"
         else
-            bailout_with_usage "Unrecognized option: $1"
+            bailout_with_usage "Unrecognized option: $opt_name"
         fi
     done
 
@@ -117,7 +118,7 @@ function process_arguments()
 function docker-pull()
 {
     echo "Pulling docker image from $docker_image_id:$docker_image_tag"
-	$DOCKER_CMD pull $docker_image_id:$docker_image_tag
+	  $DOCKER_CMD pull $docker_image_id:$docker_image_tag
 }
 
 function docker-run()
@@ -125,7 +126,7 @@ function docker-run()
     echo "Starting container \"$container_name\" from $docker_image_id:$docker_image_tag (on $bind_address:$bind_port)"
     $DOCKER_CMD run --read-only -d --restart unless-stopped \
         --name $container_name \
-        -v $lib_bind_path:/app/lib/ \
+        -v $certs_dir:/app/lib/ \
         -p $bind_address:$bind_port:$bind_port \
         $docker_image_id:$docker_image_tag python3.6 websocket-proxy.py \
                          --bind-port $bind_port \
@@ -138,7 +139,7 @@ function docker-run-shell()
     echo "Starting shell for container \"$container_name\" from $docker_image_id:$docker_image_tag (on $bind_address:$bind_port)"
     $DOCKER_CMD run --read-only \
         --name $container_name \
-        -v $lib_bind_path:/app/lib/ \
+        -v $certs_dir:/app/lib/ \
         -p $bind_address:$bind_port:$bind_port \
         -it $docker_image_id:$docker_image_tag /bin/bash
 }
@@ -165,6 +166,17 @@ function docker-trace()
 {
     echo "Tracing logs for container \"$container_name\""
     $DOCKER_CMD container logs --timestamps --follow --tail 50 $container_name
+}
+
+function docker-address()
+{
+    ip_address=$($DOCKER_CMD inspect \
+                 -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+                 ${container_name})
+    if [ -z $ip_address ]; then
+        bailout "Could not get the IP address for container $container_id"
+    fi
+    echo "${ip_address}"
 }
 
 #
