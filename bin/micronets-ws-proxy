@@ -13,7 +13,7 @@ DOCKER_CMD="docker"
 DEF_IMAGE_LOCATION="community.cablelabs.com:4567/micronets-docker/micronets-ws-proxy"
 DEF_IMAGE_TAG=nccoe-build-3
 DEF_CONTAINER_NAME=micronets-ws-proxy-service
-DEF_CERTS_PATH=/etc/micronets/micronets-ws-proxy.d/lib
+DEF_CERTS_DIR=/etc/micronets/micronets-ws-proxy.d/lib
 DEF_BIND_PORT=5050
 DEF_BIND_ADDRESS=0.0.0.0
 
@@ -118,7 +118,7 @@ function process_arguments()
 function docker-pull()
 {
     echo "Pulling docker image from $docker_image_id:$docker_image_tag"
-	  $DOCKER_CMD pull $docker_image_id:$docker_image_tag
+	$DOCKER_CMD pull $docker_image_id:$docker_image_tag
 }
 
 function docker-run()
@@ -154,6 +154,12 @@ function docker-kill()
 {
     echo "Attempting to kill container \"$container_name\""
     $DOCKER_CMD container kill $container_name
+}
+
+function docker-restart()
+{
+    echo "Attempting to restart container \"$container_name\""
+    $DOCKER_CMD container restart $container_name
 }
 
 function docker-logs()
