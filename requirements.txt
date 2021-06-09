@@ -12,7 +12,7 @@
 # 
 
 pipdeptree==0.13.2
-  pip==19.0.3
+  pip==19.2
 Quart==0.6.1
   aiofiles==0.3.2
   blinker==1.4
